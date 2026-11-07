@@ -1,0 +1,27 @@
+{
+  "port": 8090,
+  "lan": false,
+  "haHost": "homeassistant.local",
+  "haIp": "",
+  "haPort": 80,
+  "vmMemoryMB": 0,
+  "web": [
+    {
+      "name": "Jar server",
+      "kind": "jar",
+      "url": "https://YOUR-JAR-PC.YOUR-TAILNET.ts.net/v1/health"
+    },
+    {
+      "name": "HA remote access (tunnel)",
+      "kind": "http",
+      "url": ""
+    }
+  ],
+  "minecraft": [
+    {
+      "name": "Minecraft server",
+      "host": "",
+      "port": 25565
+    }
+  ]
+}

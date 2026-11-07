@@ -1,0 +1,49 @@
+# home-status
+
+A full-screen status board for the Windows PC that runs Home Assistant in a VirtualBox VM.
+It shows Home Assistant (core / Supervisor / health), the VM's memory and CPU, the VirtualBox
+autostart service, the PC itself, web endpoints reached through Tailscale Funnel, and Minecraft servers.
+
+Plain PowerShell 5.1 + one HTML page. No installs besides Git.
+
+## Files
+
+| File | What it does |
+|---|---|
+| `status.ps1` | Small web server on `http://localhost:8090` (page + `/api` JSON). Updates itself from Git. |
+| `index.html` | The board. Polls `/api` every 10 s and reloads itself when a new version is deployed. |
+| `config.example.json` | Template. Copy to `config.json` (kept out of Git) and fill in your addresses. |
+| `start-status.bat` | Starts the server and opens the board in Edge kiosk mode. |
+| `install-for-this-user.bat` | Run once as the board's account: adds `start-status.bat` to its Startup folder. |
+| `safe-restart.bat` | Shuts the HA VM down cleanly, then restarts Windows. |
+
+## Install (once)
+
+```powershell
+winget install --id Git.Git -e
+git clone https://github.com/noless-zz/home-status.git C:\HA\status
+copy C:\HA\status\config.example.json C:\HA\status\config.json   # then edit it
+```
+
+Then, signed in as the board's account, run `C:\HA\status\install-for-this-user.bat`.
+
+## Deploying changes
+
+Push to `main`. The PC fetches `origin/main` every 10 minutes; on a new commit it resets to it,
+restarts `status.ps1`, and the open page reloads itself. Open `http://localhost:8090/update`
+on the PC to check right away. The running version is shown at the bottom left of the board
+and logged in `status.log`.
+
+Local edits to tracked files are overwritten by an update — put local settings in `config.json`.
+
+## config.json
+
+- `haHost`, `haIp`, `haPort`: where Home Assistant answers (the Observer is checked on port 4357).
+- `web`: list of `{name, kind, url}`. `kind: "jar"` expects a Jar `/v1/health` reply; anything else
+  is OK on HTTP 2xx/3xx.
+- `minecraft`: list of `{name, host, port}` (Java edition status ping).
+- `lan`: `true` to serve the board on the home network too. Needs, once, in an admin PowerShell:
+  `netsh http add urlacl url=http://+:8090/ user=Everyone` and a firewall rule for TCP 8090.
+- `vmMemoryMB`: optional, the RAM given to the VM, shown next to its usage.
+
+Keep hostnames and other private details in `config.json` only; this repository is public.

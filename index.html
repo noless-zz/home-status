@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Status</title>
+<style>
+  :root { --bg:#0e1116; --card:#171b22; --line:#262c36; --text:#e8ecf2; --muted:#8a94a6;
+          --ok:#3ecf8e; --warn:#f5b84b; --bad:#ff5d5d; --off:#5b6474; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+              font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; cursor:none; }
+  .wrap { padding:3vh 3vw; height:100%; display:flex; flex-direction:column; gap:2.5vh; }
+  header { display:flex; justify-content:space-between; align-items:flex-end; }
+  .clock { font-size:min(9vw,12vh); font-weight:300; line-height:1; letter-spacing:-.02em; }
+  .date { color:var(--muted); font-size:min(2.2vw,3vh); margin-top:.6vh; }
+  .overall { text-align:right; }
+  .overall .big { font-size:min(3.2vw,4.5vh); font-weight:600; display:flex; align-items:center; gap:.6em; justify-content:flex-end; }
+  .overall .small { color:var(--muted); font-size:min(1.6vw,2.2vh); margin-top:.5vh; }
+  .grid { flex:1; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr)); gap:2vh 1.5vw; align-content:start; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:2.2vh 1.6vw; border-left:6px solid var(--off); }
+  .card.ok { border-left-color:var(--ok); } .card.warn { border-left-color:var(--warn); } .card.bad { border-left-color:var(--bad); }
+  .card h2 { margin:0; font-size:min(1.5vw,2.1vh); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:600; }
+  .main { font-size:min(2.6vw,3.6vh); font-weight:600; margin:1vh 0 1.2vh; display:flex; align-items:center; gap:.5em; }
+  .rows { display:grid; grid-template-columns:auto minmax(0,1fr); gap:.5vh 1.2em; font-size:min(1.5vw,2.1vh); }
+  .rows dt { color:var(--muted); } .rows dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; min-width:0; }
+  .dot { width:.6em; height:.6em; border-radius:50%; background:var(--off); flex:none; }
+  .ok .dot, .dot.ok { background:var(--ok); box-shadow:0 0 12px var(--ok); }
+  .warn .dot, .dot.warn { background:var(--warn); box-shadow:0 0 12px var(--warn); }
+  .bad .dot, .dot.bad { background:var(--bad); box-shadow:0 0 12px var(--bad); animation:pulse 1.4s infinite; }
+  .bar { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:.4vh; }
+  .bar i { display:block; height:100%; background:var(--ok); }
+  @keyframes pulse { 50% { opacity:.35; } }
+  footer { color:var(--muted); font-size:min(1.3vw,1.8vh); display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><div class="clock" id="clock">--:--</div><div class="date" id="date"></div></div>
+    <div class="overall"><div class="big" id="overall"><span class="dot"></span>Checking…</div><div class="small" id="updated"></div></div>
+  </header>
+  <div class="grid" id="grid"></div>
+  <footer><span id="hostname"></span><span>Ctrl+Alt+Del → Switch user to use this PC</span></footer>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+let last = null, lastOk = 0, ver = null;
+function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function ago(iso){ if(!iso) return '—'; let s=Math.max(0,(Date.now()-new Date(iso))/1000);
+  const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
+  return d? `${d}d ${h}h` : h? `${h}h ${m}m` : `${m}m ${Math.floor(s%60)}s`; }
+function card(title, level, main, rows, extra=''){
+  return `<section class="card ${level}"><h2>${esc(title)}</h2><div class="main"><span class="dot"></span>${esc(main)}</div>
+  <dl class="rows">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${extra}</section>`; }
+function bar(pct){ pct=Math.max(0,Math.min(100,pct||0)); const c = pct>90?'var(--bad)':pct>75?'var(--warn)':'var(--ok)';
+  return `<div class="bar"><i style="width:${pct}%;background:${c}"></i></div>`; }
+
+function render(d){
+  const cards=[], levels=[];
+  const ha=d.ha||{};
+  let hl = ha.core==='running' && ha.health==='Healthy' ? 'ok' : ha.core==='running' ? 'warn' : ha.core==='starting' || ha.supervisor==='Connected' ? 'warn' : 'bad';
+  const hm = ha.core==='running' ? (ha.health==='Healthy'?'Running':'Running · '+ha.health) : ha.core==='starting' ? 'Starting…' : ha.supervisor==='Connected' ? 'Core not up yet' : 'Not reachable';
+  cards.push(card('Home Assistant', hl, hm, [['Core', ha.core], ['Supervisor', ha.supervisor], ['Health', ha.health], ['Address', ha.url||'']])); levels.push(hl);
+
+  const vm=d.vm||{};
+  const vl = vm.running ? 'ok' : 'bad';
+  const vmRows=[['Process', vm.process||'not running'], ['Memory', vm.running? (vm.memMB/1024).toFixed(1)+' GB'+(vm.allocMB?` / ${(vm.allocMB/1024).toFixed(1)} GB`:''):'—'],
+                ['CPU', vm.running? vm.cpu+' %':'—'], ['Up for', vm.started? ago(vm.started):'—']];
+  cards.push(card('HA virtual machine', vl, vm.running?'Running':'Stopped', vmRows, vm.running?bar(vm.cpu):'')); levels.push(vl);
+
+  const as=d.autostart||{};
+  // VirtualBox's Windows autostart service starts the VMs at boot and then exits, so "Stopped" is normal.
+  const al = !as.installed ? 'warn' : as.startType!=='Automatic' ? 'warn' : 'ok';
+  const am = !as.installed ? 'Not installed' : as.startType!=='Automatic' ? 'Not set to start at boot' : as.status==='Running' ? 'Starting VMs…' : 'Ready for next boot';
+  cards.push(card('VM autostart service', al, am, as.installed?[['Start type', as.startType],['Service now', as.status],['Account', (as.name||'').replace(/^VirtualBox Autostart Service\s*/,'')]]:[['Effect','HA won’t start by itself after reboot']])); levels.push(al);
+
+  const h=d.host||{}; const memPct = h.memTotalGB? h.memUsedGB/h.memTotalGB*100 : 0;
+  const hostL = memPct>92 || (h.diskFreeGB!=null && h.diskFreeGB<10) ? 'warn' : 'ok';
+  cards.push(card('This PC', hostL, `CPU ${h.cpu??'—'}% · RAM ${Math.round(memPct)}%`,
+    [['Memory', `${h.memUsedGB} / ${h.memTotalGB} GB`], ['Disk C: free', `${h.diskFreeGB} / ${h.diskTotalGB} GB`], ['Up since boot', ago(h.boot)]], bar(memPct))); levels.push(hostL);
+
+  const ts=d.tailscale||{};
+  if(ts.installed){ const tl = ts.state==='Running'?'ok':'warn';
+    cards.push(card('Tailscale', tl, ts.state==='Running'?'Connected':ts.state, [['Tailnet IP', ts.ip||'—'], ['Devices online', ts.peers!=null?`${ts.peersOnline} / ${ts.peers}`:'—']])); levels.push(tl); }
+
+  for(const w of (d.web||[])){
+    const wl = w.ok ? (w.ms>3000?'warn':'ok') : (w.err==='not configured' ? '' : 'bad');
+    let host=''; try{ host=new URL(w.url).host; }catch(e){}
+    const main = w.err==='not configured' ? 'Not set up' : w.ok ? `Online · ${w.ms} ms` : 'Down';
+    const rows = w.err==='not configured' ? [['', 'Add its address in C:\\HA\\status\\config.json']]
+      : [['Through', w.kind==='jar' ? (w.via==='funnel'?'Tailscale Funnel (internet)':(w.via?'tailnet':'—')) : 'Tailscale Funnel (internet)'], ['Address', host], ...(w.ok?[]:[['Error', w.err||('HTTP '+w.code)]])];
+    cards.push(card(w.name, wl, main, rows)); if(wl) levels.push(wl);
+  }
+
+  const mc=d.minecraft||[];
+  if(!mc.length) cards.push(card('Minecraft', '', 'Not set up', [['', 'Add the server in C:\\HA\\status\\config.json']]));
+  for(const s of mc){ const ml = s.online?'ok':'bad';
+    cards.push(card('Minecraft · '+(s.name||s.host), ml, s.online?`${s.players} / ${s.max} players`:'Offline',
+      s.online? [['Version', s.version], ['Ping', s.ms+' ms'], ['Who', (s.who||[]).join(', ')||'—']] : [['Address', `${s.host}:${s.port}`], ['Error', s.err||'']])); levels.push(ml); }
+
+  $('grid').innerHTML = cards.join('');
+  const worst = levels.includes('bad')?'bad':levels.includes('warn')?'warn':'ok';
+  $('overall').className='big'; $('overall').innerHTML = `<span class="dot ${worst}"></span>` + (worst==='ok'?'All systems normal':worst==='warn'?'Needs attention':'Something is down');
+  $('hostname').textContent = (h.name || '') + (d.version ? ' · v ' + d.version : '');
+}
+async function poll(){
+  try { const r = await fetch('/api',{cache:'no-store'}); last = await r.json(); lastOk = Date.now();
+    if (ver && last.version && last.version !== ver) { location.reload(); return; }
+    ver = last.version || ver; render(last); }
+  catch(e){ $('overall').innerHTML = '<span class="dot bad"></span>Status service not responding'; }
+}
+function tick(){ const n=new Date();
+  $('clock').textContent = n.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  $('date').textContent = n.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  if(lastOk) $('updated').textContent = 'Updated '+Math.round((Date.now()-lastOk)/1000)+' s ago';
+  if(last) { /* keep relative times fresh */ } }
+poll(); setInterval(poll, 10000); tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>
