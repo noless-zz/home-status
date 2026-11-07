@@ -59,9 +59,11 @@ Keep hostnames and other private details in `config.json` only; this repository 
 
 ## Locked-down kiosk (optional)
 
-Signed in as the kiosk account, run `C:\HA\status\install-kiosk.cmd`, then sign out and in.
+Signed in as the kiosk account, run `C:\HA\status\install-kiosk.cmd`. Then, in an administrator PowerShell,
+run `powershell -ExecutionPolicy Bypass -File C:\HA\status\lock-kiosk-admin.ps1` (turns off Task Manager and
+Lock for that account; a limited account can't set those itself). Sign the kiosk account out and in.
 Explorer is replaced by `kiosk-shell.ps1`: no Start menu, taskbar, desktop or Task Manager, and the
 board (and its server) are restarted if closed. Ctrl+Alt+Del still offers Switch user and Sign out.
 
 To undo: from another account create `C:\HA\status\kiosk-off`, sign the kiosk account in (a File
-Explorer window opens instead of the board), run `uninstall-kiosk.cmd`, delete `kiosk-off`, sign out and in.
+Explorer window opens instead of the board), run `uninstall-kiosk.cmd` (and `lock-kiosk-admin.ps1 -Undo` as admin), delete `kiosk-off`, sign out and in.
