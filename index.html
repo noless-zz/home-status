@@ -8,7 +8,7 @@
   :root { --bg:#0e1116; --card:#171b22; --line:#262c36; --text:#e8ecf2; --muted:#8a94a6;
           --ok:#3ecf8e; --warn:#f5b84b; --bad:#ff5d5d; --off:#5b6474; }
   * { box-sizing:border-box; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text); overflow:hidden;
               font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; cursor:none; }
   .wrap { padding:3vh 3vw; height:100%; display:flex; flex-direction:column; gap:2.5vh; }
   header { display:flex; justify-content:space-between; align-items:flex-end; }
@@ -18,6 +18,16 @@
   .overall .big { font-size:min(3.2vw,4.5vh); font-weight:600; display:flex; align-items:center; gap:.6em; justify-content:flex-end; }
   .overall .small { color:var(--muted); font-size:min(1.6vw,2.2vh); margin-top:.5vh; }
   .grid { flex:1; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr)); gap:2vh 1.5vw; align-content:start; }
+  .bg { position:fixed; inset:0; background:center/cover no-repeat; opacity:0; transition:opacity 2.5s ease; z-index:0; }
+  .bg.show { opacity:1; }
+  .shade { position:fixed; inset:0; z-index:1; pointer-events:none;
+           background:linear-gradient(180deg, rgba(8,10,14,.55) 0%, rgba(8,10,14,.30) 40%, rgba(8,10,14,.70) 100%); }
+  .wrap { position:relative; z-index:2; }
+  .clock, .date, .overall { text-shadow:0 2px 12px rgba(0,0,0,.6); }
+  .card { backdrop-filter:blur(14px) saturate(1.1); -webkit-backdrop-filter:blur(14px);
+          background:rgba(20,24,31,.66) !important; }
+  footer span { text-shadow:0 1px 6px rgba(0,0,0,.8); }
+  #photo { max-width:45vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:2.2vh 1.6vw; border-left:6px solid var(--off); }
   .card.ok { border-left-color:var(--ok); } .card.warn { border-left-color:var(--warn); } .card.bad { border-left-color:var(--bad); }
   .card h2 { margin:0; font-size:min(1.5vw,2.1vh); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:600; }
@@ -35,13 +45,14 @@
 </style>
 </head>
 <body>
+<div class="bg" id="bgA"></div><div class="bg" id="bgB"></div><div class="shade"></div>
 <div class="wrap">
   <header>
     <div><div class="clock" id="clock">--:--</div><div class="date" id="date"></div></div>
     <div class="overall"><div class="big" id="overall"><span class="dot"></span>Checking…</div><div class="small" id="updated"></div></div>
   </header>
   <div class="grid" id="grid"></div>
-  <footer><span id="hostname"></span><span>Ctrl+Alt+Del → Switch user to use this PC</span></footer>
+  <footer><span id="hostname"></span><span id="photo"></span><span>Ctrl+Alt+Del → Switch user to use this PC</span></footer>
 </div>
 <script>
 const $ = id => document.getElementById(id);
@@ -56,6 +67,17 @@ function card(title, level, main, rows, extra=''){
 function bar(pct){ pct=Math.max(0,Math.min(100,pct||0)); const c = pct>90?'var(--bad)':pct>75?'var(--warn)':'var(--ok)';
   return `<div class="bar"><i style="width:${pct}%;background:${c}"></i></div>`; }
 
+let bgId = null, bgFront = 'bgA';
+function setBg(b){
+  if(!b || !b.id || b.id === bgId) return;
+  const url = '/bg?id=' + encodeURIComponent(b.id), img = new Image();
+  img.onload = () => {
+    bgId = b.id; const back = bgFront === 'bgA' ? 'bgB' : 'bgA';
+    $(back).style.backgroundImage = `url("${url}")`; $(back).classList.add('show'); $(bgFront).classList.remove('show'); bgFront = back;
+    $('photo').textContent = [b.title, b.copyright].filter(Boolean).join(' · ');
+  };
+  img.src = url;
+}
 function render(d){
   const cards=[], levels=[];
   const ha=d.ha||{};
@@ -107,7 +129,7 @@ function render(d){
 async function poll(){
   try { const r = await fetch('/api',{cache:'no-store'}); last = await r.json(); lastOk = Date.now();
     if (ver && last.version && last.version !== ver) { location.reload(); return; }
-    ver = last.version || ver; render(last); }
+    ver = last.version || ver; render(last); setBg(last.bg); }
   catch(e){ $('overall').innerHTML = '<span class="dot bad"></span>Status service not responding'; }
 }
 function tick(){ const n=new Date();

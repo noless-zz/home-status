@@ -15,7 +15,7 @@ function Log($m) {
 function Get-Http($url, $timeoutMs) {
   try {
     $req = [System.Net.HttpWebRequest]::Create($url)
-    $req.Timeout = $timeoutMs; $req.ReadWriteTimeout = $timeoutMs
+    $req.Timeout = $timeoutMs; $req.ReadWriteTimeout = $timeoutMs; $req.UserAgent = 'WindowsShellClient/9.0.40929.0 (Windows)'
     $resp = $req.GetResponse()
     $sr = New-Object System.IO.StreamReader($resp.GetResponseStream())
     $body = $sr.ReadToEnd(); $code = [int]$resp.StatusCode; $resp.Close()
@@ -182,12 +182,71 @@ function Reload-Config {
   } catch { Log "config.json not reloaded (check the JSON): $_" }
 }
 
+
+# ---- background photo: Windows Spotlight, a new one every hour ----
+$bgDir = Join-Path $root 'bg'
+$bgState = Join-Path $bgDir 'state.json'
+$bgQueue = New-Object System.Collections.ArrayList
+$bg = $null
+function Get-SpotlightBatch {
+  $u = 'https://fd.api.iris.microsoft.com/v4/api/selection?placement=88000820&bcnt=4&country=US&locale=en-US&fmt=json'
+  $o = Get-Http $u 10000
+  $list = @()
+  if (-not $o.ok -or -not $o.body) { Log "spotlight: no reply $($o.err)"; return $list }
+  try { $j = $o.body | ConvertFrom-Json } catch { Log 'spotlight: bad reply'; return $list }
+  foreach ($it in @($j.batchrsp.items)) {
+    try {
+      $ad = ($it.item | ConvertFrom-Json).ad
+      $url = $ad.landscapeImage.asset
+      if ($url) { $list += [pscustomobject]@{ url = $url; title = "$($ad.title)"; copyright = "$($ad.copyright)" } }
+    } catch {}
+  }
+  return $list
+}
+function Set-Background($file, $title, $copyright, $hours) {
+  $script:bg = @{ id = (Split-Path $file -Leaf); file = $file; title = $title; copyright = $copyright; until = (Get-Date).AddHours($hours).ToString('o') }
+  try { $script:bg | ConvertTo-Json | Set-Content $bgState -Encoding UTF8 } catch {}
+}
+function Next-Background {
+  if (-not (Test-Path $bgDir)) { New-Item -ItemType Directory $bgDir | Out-Null }
+  if ($script:bgQueue.Count -eq 0) { foreach ($c in @(Get-SpotlightBatch)) { [void]$script:bgQueue.Add($c) } }
+  while ($script:bgQueue.Count -gt 0) {
+    $c = $script:bgQueue[0]; $script:bgQueue.RemoveAt(0)
+    $hash = [Security.Cryptography.MD5]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($c.url))
+    $name = (([BitConverter]::ToString($hash)) -replace '-', '').Substring(0, 16).ToLower()
+    $file = Join-Path $bgDir "$name.jpg"
+    if ($script:bg -and $script:bg.file -eq $file) { continue }
+    try {
+      if (-not (Test-Path $file)) { Invoke-WebRequest -Uri $c.url -OutFile $file -UseBasicParsing -TimeoutSec 30 }
+      @{ title = $c.title; copyright = $c.copyright } | ConvertTo-Json | Set-Content (Join-Path $bgDir "$name.json") -Encoding UTF8
+    } catch { Log "spotlight: download failed: $_"; continue }
+    Set-Background $file $c.title $c.copyright 1
+    Get-ChildItem $bgDir -Filter *.jpg | Sort-Object LastWriteTime -Descending | Select-Object -Skip 48 |
+      ForEach-Object { Remove-Item $_.FullName, ($_.FullName -replace '\.jpg$', '.json') -ErrorAction SilentlyContinue }
+    return
+  }
+  # Offline: show one of the saved photos and try again in 15 minutes.
+  $old = Get-ChildItem $bgDir -Filter *.jpg -ErrorAction SilentlyContinue | Where-Object { -not $script:bg -or $_.FullName -ne $script:bg.file } | Get-Random
+  if ($old) {
+    $meta = $null; try { $meta = Get-Content ($old.FullName -replace '\.jpg$', '.json') -Raw | ConvertFrom-Json } catch {}
+    Set-Background $old.FullName "$($meta.title)" "$($meta.copyright)" 0.25
+  }
+}
+function Check-Background {
+  if ("$($cfg.background)" -eq 'none') { $script:bg = $null; return }
+  if (-not $script:bg -or (Get-Date) -ge [datetime]::Parse($script:bg.until)) { try { Next-Background } catch { Log "background: $_" } }
+}
+try {
+  $saved = Get-Content $bgState -Raw -ErrorAction Stop | ConvertFrom-Json
+  if ($saved.file -and (Test-Path $saved.file)) { $bg = @{ id = $saved.id; file = $saved.file; title = $saved.title; copyright = $saved.copyright; until = $saved.until } }
+} catch {}
+
 function Get-Status {
   Reload-Config
   $web = @(); foreach ($w in @($cfg.web)) { if ($w) { $web += Get-Web $w } }
   $mc = @(); foreach ($srv in @($cfg.minecraft)) { if ($srv -and $srv.host) { $mc += Get-Minecraft $srv } }
   return @{
-    time = (Get-Date).ToString('o'); version = $version; ha = Get-HA; vm = Get-VM; autostart = Get-Autostart
+    time = (Get-Date).ToString('o'); version = $version; bg = $(if ($bg) { @{ id = $bg.id; title = $bg.title; copyright = $bg.copyright } } else { $null }); ha = Get-HA; vm = Get-VM; autostart = Get-Autostart
     host = Get-HostInfo; tailscale = Get-Tailscale; web = $web; minecraft = $mc
   }
 }
@@ -229,10 +288,12 @@ try { $listener.Start() } catch {
 Log "listening on $($listener.Prefixes -join ',') (version $version)"
 $cache = $null; $cacheAt = [datetime]::MinValue
 $nextUpdate = (Get-Date).AddMinutes(1)
+Check-Background; $nextBgCheck = (Get-Date).AddMinutes(1)
 while ($listener.IsListening) {
   try {
     $ar = $listener.BeginGetContext($null, $null)
     while (-not $ar.AsyncWaitHandle.WaitOne(1000)) {
+      if ((Get-Date) -ge $nextBgCheck) { $nextBgCheck = (Get-Date).AddMinutes(1); Check-Background }
       if ((Get-Date) -ge $nextUpdate) {
         $nextUpdate = (Get-Date).AddMinutes(10)
         if (Update-FromGit) {
@@ -248,6 +309,12 @@ while ($listener.IsListening) {
     if ($path -eq '/api') {
       if (((Get-Date) - $cacheAt).TotalSeconds -gt 8) { $cache = (Get-Status | ConvertTo-Json -Depth 6 -Compress); $cacheAt = Get-Date }
       $bytes = [Text.Encoding]::UTF8.GetBytes($cache); $ctx.Response.ContentType = 'application/json; charset=utf-8'
+    } elseif ($path -eq '/bg') {
+      if ($bg -and (Test-Path $bg.file)) { $bytes = [IO.File]::ReadAllBytes($bg.file) } else { $bytes = New-Object byte[] 0; $ctx.Response.StatusCode = 404 }
+      $ctx.Response.ContentType = 'image/jpeg'
+    } elseif ($path -eq '/next-bg') {
+      $bg = $null; Check-Background
+      $bytes = [Text.Encoding]::UTF8.GetBytes('{"ok":true}'); $ctx.Response.ContentType = 'application/json'; $cacheAt = [datetime]::MinValue
     } elseif ($path -eq '/update') {
       $nextUpdate = Get-Date
       $bytes = [Text.Encoding]::UTF8.GetBytes('{"ok":true,"msg":"checking for updates"}'); $ctx.Response.ContentType = 'application/json'

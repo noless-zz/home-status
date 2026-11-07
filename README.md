@@ -48,6 +48,9 @@ A JSON mistake keeps the previous settings and is logged in `status.log`.
 - `minecraft`: list of `{name, host, port}` (Java edition status ping).
 - `lan`: `true` to serve the board on the home network too. Needs, once, in an admin PowerShell:
   `netsh http add urlacl url=http://+:8090/ user=Everyone` and a firewall rule for TCP 8090.
+- `background`: `"spotlight"` (default) shows a Windows Spotlight photo, a new one every hour
+  (saved in `bg\`, the newest 48 kept, reused when offline); `"none"` turns it off.
+  `http://localhost:8090/next-bg` skips to the next photo.
 - `vmMemoryMB`: optional, the RAM given to the VM, shown next to its usage.
 
 Keep hostnames and other private details in `config.json` only; this repository is public.
