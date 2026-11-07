@@ -57,11 +57,13 @@
   .main { font-size:min(2.5vw,3.5vh); font-weight:600; margin:1vh 0 1.2vh; display:flex; align-items:center; gap:.5em; }
   .rows { display:grid; grid-template-columns:auto minmax(0,1fr); gap:.5vh 1.2em; font-size:min(1.45vw,2vh); margin:0; }
   .rows dt { color:var(--muted); } .rows dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; min-width:0; }
-  .parts { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,14rem),1fr)); gap:1vh 1.4vw; font-size:min(1.4vw,1.95vh); }
-  .part { display:flex; align-items:baseline; gap:.55em; min-width:0; }
-  .part .dot { width:.55em; height:.55em; align-self:center; }
-  .part b { font-weight:600; white-space:nowrap; }
-  .part span.v { color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  /* Jar card: two label/value columns (services | details) split by a thin line */
+  .jar { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr)); gap:1.2vh 2.2vw; }
+  .jar-col + .jar-col { border-left:1px solid var(--line); padding-left:2.2vw; }
+  .jar h3 { margin:0 0 .8vh; font-size:min(1.1vw,1.55vh); font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); opacity:.75; }
+  .jar dt { display:flex; align-items:center; gap:.5em; white-space:nowrap; align-self:start; line-height:1.3; }
+  .jar dt .dot { width:.55em; height:.55em; }
+  .jar dd { line-height:1.3; overflow-wrap:break-word; }
   .dot { width:.6em; height:.6em; border-radius:50%; background:var(--off); flex:none; }
   .ok .main .dot, .dot.ok { background:var(--ok); box-shadow:0 0 12px var(--ok); animation:breathe 4s ease-in-out infinite; }
   .warn .main .dot, .dot.warn { background:var(--warn); box-shadow:0 0 12px var(--warn); }
@@ -134,30 +136,36 @@ function bar(pct){ pct=Math.max(0,Math.min(100,pct||0)); const c = pct>90?'var(-
 const short = v => { v = String(v ?? ''); return /^[0-9a-f]{12,}$/i.test(v) ? v.slice(0, 7) : v; };
 
 /* ---------------- Jar card (from Jar's read-only /v1/monitor) ---------------- */
+// Two columns in the same label/value style as the other cards: services (with a status dot) and
+// details (plain info). Values are kept short and wrap instead of being cut off — no hover on a kiosk.
 function jarCard(w){
-  const m = w.monitor, parts = [];
+  const m = w.monitor, svc = [], info = [];
   let level = w.ok ? (w.ms > 3000 ? 'warn' : 'ok') : 'bad';
-  const part = (name, ok, val) => { parts.push(`<div class="part"><span class="dot ${ok===null?'':ok?'ok':'bad'}"></span><b>${esc(name)}</b><span class="v">${esc(val)}</span></div>`);
-                                     if (ok === false && level === 'ok') level = 'warn'; };
+  const lines = v => (Array.isArray(v) ? v : [v]).filter(x => x !== '' && x != null).map(esc).join('<br>') || '—';
+  const service = (name, ok, val) => { svc.push([`<span class="dot ${ok===null?'':ok?'ok':'bad'}"></span>${esc(name)}`, lines(val)]);
+                                       if (ok === false && level === 'ok') level = 'warn'; };
+  const detail = (name, val) => info.push([esc(name), lines(val)]);
   let main = w.ok ? `Online · ${w.ms} ms` : 'Down';
   if (m) {
     const s = m.supervisor||{}, wk = m.worker||{}, ol = m.ollama||{}, fn = m.funnel||{}, ev = m.eval;
-    part('Server', true, `app ${m.app_version||'?'}`);
-    part('Supervisor', !!s.alive, `code ${short(s.code)||'?'}${s.update?' · update waiting':''}${s.restarts?` · ${s.restarts} restarts`:''}`);
-    part('Worker', !!wk.alive, wk.doing || (wk.alive?'idle':'not running'));
-    part('Ollama', !!ol.up, ol.up ? ((ol.loaded||[]).join(', ') || 'up, no model loaded') : 'not reachable');
-    part('Models', null, [wk.llm, wk.whisper].filter(Boolean).join(' · ') || '—');
-    if (fn.wanted !== undefined) part('Funnel', fn.wanted ? !!fn.ok : null, fn.wanted ? (fn.ok ? 'reachable from the internet' : (fn.problem||'problem')) : 'off');
+    service('Server', true, m.app_version ? 'v' + m.app_version : 'running');
+    service('Supervisor', !!s.alive, [short(s.code) || (s.alive ? 'running' : 'not running'), s.update && 'update waiting', s.restarts && `${s.restarts} restarts`]);
+    service('Worker', !!wk.alive, wk.doing || (wk.alive ? 'Idle' : 'Not running'));
+    service('Ollama', !!ol.up, ol.up ? ((ol.loaded||[]).length ? ol.loaded : 'Up · idle') : 'Not reachable');
+    if (fn.wanted !== undefined) service('Funnel', fn.wanted ? !!fn.ok : null, fn.wanted ? (fn.ok ? 'Public' : (fn.problem||'Problem')) : 'Off');
+    detail('Models', [wk.llm, wk.whisper].filter(Boolean).map(x => String(x).split('/').pop()));   // drop "org/" prefixes
     const c = m.memos||{}, total = Object.values(c).reduce((a,b)=>a+b,0);
-    const odd = Object.entries(c).filter(([k])=>!/^(done|filed|ok|processed)$/i.test(k)).map(([k,v])=>`${v} ${k}`).join(', ');
-    part('Memos', null, `${total} recent${odd?' · '+odd:''}`);
-    if (ev && ev.total) part('AI test', ev.passed === ev.total, `${ev.passed}/${ev.total}${ev.model?' · '+ev.model:''}`);
+    const odd = Object.entries(c).filter(([k])=>!/^(done|filed|ok|processed)$/i.test(k)).map(([k,v])=>`${v} ${k}`);
+    detail('Memos', [`${total} recent`, ...odd]);
+    if (ev && ev.total) { detail('AI test', [`${ev.passed}/${ev.total}${ev.passed === ev.total ? ' ✓' : ''}`, ev.model]);
+                          if (ev.passed !== ev.total && level === 'ok') level = 'warn'; }
     if (level === 'ok') main = `All parts running · ${w.ms} ms`;
     else if (w.ok) main = 'Running, with a problem';
-  } else if (w.ok && w.monitorErr) { part('Details', null, `not available (${w.monitorErr})`); }
-  else if (w.ok) { part('Details', null, 'add "monitorKey" in config.json to see every part'); }
-  if (!w.ok) part('Error', false, w.err || ('HTTP ' + w.code));
-  return card(w.name || 'Jar', level, main, [], `<div class="parts">${parts.join('')}</div>`, 'wide');
+  } else if (w.ok && w.monitorErr) { detail('Details', `Not available (${w.monitorErr})`); }
+  else if (w.ok) { detail('Details', 'Add "monitorKey" in config.json to see every part'); }
+  if (!w.ok) service('Error', false, w.err || ('HTTP ' + w.code));
+  const col = (title, rows) => rows.length ? `<div class="jar-col"><h3>${title}</h3><dl class="rows">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div>` : '';
+  return card(w.name || 'Jar', level, main, [], `<div class="jar">${col('Services', svc)}${col('Details', info)}</div>`, 'wide');
 }
 
 /* ---------------- render ---------------- */
