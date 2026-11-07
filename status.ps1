@@ -168,7 +168,22 @@ function Get-Web($w) {
   return $r
 }
 
+$cfgStamp = (Get-Item $cfgFile).LastWriteTimeUtc
+function Reload-Config {
+  # config.json is re-read whenever it changes, so edits show up without restarting the board.
+  try {
+    $f = Join-Path $root 'config.json'; if (-not (Test-Path $f)) { return }
+    $t = (Get-Item $f).LastWriteTimeUtc
+    if ($f -ne $script:cfgFile -or $t -ne $script:cfgStamp) {
+      $script:cfg = Get-Content $f -Raw | ConvertFrom-Json
+      $script:cfgFile = $f; $script:cfgStamp = $t
+      Log 'config.json reloaded'
+    }
+  } catch { Log "config.json not reloaded (check the JSON): $_" }
+}
+
 function Get-Status {
+  Reload-Config
   $web = @(); foreach ($w in @($cfg.web)) { if ($w) { $web += Get-Web $w } }
   $mc = @(); foreach ($srv in @($cfg.minecraft)) { if ($srv -and $srv.host) { $mc += Get-Minecraft $srv } }
   return @{

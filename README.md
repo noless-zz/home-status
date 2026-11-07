@@ -38,6 +38,10 @@ Local edits to tracked files are overwritten by an update — put local settings
 
 ## config.json
 
+Edits are picked up within about 10 seconds, no restart needed (except `port` and `lan`).
+A JSON mistake keeps the previous settings and is logged in `status.log`.
+
+
 - `haHost`, `haIp`, `haPort`: where Home Assistant answers (the Observer is checked on port 4357).
 - `web`: list of `{name, kind, url}`. `kind: "jar"` expects a Jar `/v1/health` reply; anything else
   is OK on HTTP 2xx/3xx.
