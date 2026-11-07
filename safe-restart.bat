@@ -12,4 +12,5 @@ echo Still running after 2 minutes - saving its state instead.
 %VBM% controlvm %VM% savestate
 :done
 echo Restarting Windows...
-shutdown /r /t 5
+rem /f closes the kiosk account's apps without asking (nothing to save there)
+shutdown /r /f /t 5
