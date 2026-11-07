@@ -29,6 +29,14 @@ copy C:\HA\status\config.example.json C:\HA\status\config.json   # then edit it
 
 Then, signed in as the board's account, run `C:\HA\status\install-for-this-user.bat`.
 
+## What the cards show
+
+Graphics where they read faster than text: ring gauges for the PC's CPU, RAM and disk; 10-minute
+sparklines for CPU (PC and VM) and response time (web endpoints) — history starts when the page loads;
+status chips for Home Assistant's core, Supervisor and health; and for Jar, the request path drawn as
+a flow (Funnel → Server → Worker → Ollama, with a moving dot while all parts are up) above the
+Supervisor, memos, models and AI-test details. Long addresses wrap only after `.`, `/`, `@` or `:`.
+
 ## Screen-saver behaviour (burn-in)
 
 The board alternates between the dashboard (~100 s) and an ambient view (~4 min) with a big clock that

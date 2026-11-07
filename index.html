@@ -41,7 +41,7 @@
   .overall .small { color:var(--muted); font-size:min(1.6vw,2.2vh); margin-top:.5vh; }
   .clock, .date, .overall, .amb-clock, .amb-date, .amb-line { text-shadow:0 2px 14px rgba(0,0,0,.65); }
   .grid { flex:1; display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,21rem),1fr));
-          gap:2vh 1.4vw; align-content:start; }
+          gap:2vh 1.4vw; align-content:start; grid-auto-flow:row dense; }
   .card { position:relative; overflow:hidden; border-radius:16px; padding:2.1vh 1.5vw;
           background:rgba(18,22,30,.62); border:1px solid var(--line); border-left:6px solid var(--off);
           backdrop-filter:blur(16px) saturate(1.15); -webkit-backdrop-filter:blur(16px) saturate(1.15); }
@@ -56,14 +56,57 @@
   .card h2 { margin:0; font-size:min(1.45vw,2vh); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:600; }
   .main { font-size:min(2.5vw,3.5vh); font-weight:600; margin:1vh 0 1.2vh; display:flex; align-items:center; gap:.5em; }
   .rows { display:grid; grid-template-columns:auto minmax(0,1fr); gap:.5vh 1.2em; font-size:min(1.45vw,2vh); margin:0; }
-  .rows dt { color:var(--muted); } .rows dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; min-width:0; }
-  /* Jar card: two label/value columns (services | details) split by a thin line */
-  .jar { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr)); gap:1.2vh 2.2vw; }
-  .jar-col + .jar-col { border-left:1px solid var(--line); padding-left:2.2vw; }
-  .jar h3 { margin:0 0 .8vh; font-size:min(1.1vw,1.55vh); font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); opacity:.75; }
-  .jar dt { display:flex; align-items:center; gap:.5em; white-space:nowrap; align-self:start; line-height:1.3; }
-  .jar dt .dot { width:.55em; height:.55em; }
-  .jar dd { line-height:1.3; overflow-wrap:break-word; }
+  .rows dt { color:var(--muted); } .rows dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; overflow-wrap:break-word; min-width:0; }
+  .main { align-items:baseline; flex-wrap:wrap; row-gap:0; } .main > .dot { align-self:center; }
+  .main small { font-size:.55em; font-weight:500; color:var(--muted); white-space:nowrap; align-self:baseline; }
+
+  /* status chips (Home Assistant parts, autostart) */
+  .chips { display:flex; flex-wrap:wrap; gap:.55em; margin:0 0 1.3vh; font-size:min(1.3vw,1.8vh); }
+  .chip { display:flex; align-items:center; gap:.45em; padding:.3em .8em .3em .65em; border-radius:999px;
+          background:rgba(255,255,255,.06); border:1px solid var(--line); white-space:nowrap; }
+  .chip .dot { width:.5em; height:.5em; }
+
+  /* ring gauges (This PC) */
+  .rings { display:flex; justify-content:space-around; gap:1vw; margin:0 0 .9vh; }
+  .ring { position:relative; width:min(5.2vw,7.4vh); aspect-ratio:1; }
+  .ring svg { width:100%; height:100%; transform:rotate(-90deg); }
+  .ring circle { fill:none; stroke-width:3.4; stroke-linecap:round; transition:stroke-dasharray 1.5s ease; }
+  .ring circle.track { stroke:rgba(255,255,255,.12); }
+  .ring .lbl { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+               font-weight:600; font-size:min(1.35vw,1.9vh); line-height:1.05; font-variant-numeric:tabular-nums; }
+  .ring .lbl small { color:var(--muted); font-weight:500; font-size:.68em; letter-spacing:.05em; }
+
+  /* sparklines (CPU, response time over the last 10 min) */
+  .spk { margin:0 0 1vh; }
+  .spk-h { display:flex; justify-content:space-between; font-size:min(1.15vw,1.6vh); color:var(--muted); margin-bottom:.4vh; }
+  .spk-h b { color:var(--text); font-weight:600; font-variant-numeric:tabular-nums; }
+  .spk svg { display:block; width:100%; height:3.4vh; border-bottom:1px solid var(--line); }
+
+  /* Jar: request path as a flow — Funnel → Server → Worker → Ollama — then details in two columns */
+  .flow { display:flex; align-items:flex-start; margin:0 0 1.3vh; --ic:min(3vw,4.2vh); }
+  .node { flex:1 1 0; display:flex; flex-direction:column; align-items:center; text-align:center; gap:.45vh; min-width:0; }
+  .node .ic { width:var(--ic); aspect-ratio:1; border-radius:28%; display:grid; place-items:center; color:var(--off);
+              background:rgba(255,255,255,.05); border:1.5px solid var(--off); }
+  .node.ok .ic { color:var(--ok); border-color:var(--ok); background:rgba(62,207,142,.12); box-shadow:0 0 14px rgba(62,207,142,.25); }
+  .node.bad .ic { color:var(--bad); border-color:var(--bad); background:rgba(255,93,93,.14); animation:pulse 1.2s infinite; }
+  .node .ic svg { width:56%; height:56%; }
+  .node b { font-size:min(1.3vw,1.8vh); font-weight:600; margin-top:.3vh; }
+  .node span { font-size:min(1.15vw,1.6vh); color:var(--muted); line-height:1.25; overflow-wrap:break-word; max-width:100%; }
+  .arrow { flex:0 1 4vw; min-width:1.2vw; height:2px; margin-top:calc(var(--ic) / 2 - 1px); position:relative;
+           background:linear-gradient(90deg, rgba(255,255,255,.12), rgba(255,255,255,.35)); }
+  .arrow::before { content:""; position:absolute; right:-1px; top:-4px; border:5px solid transparent; border-left:6px solid rgba(255,255,255,.35); border-right:0; }
+  .arrow::after { content:""; position:absolute; top:-2px; left:0; width:6px; height:6px; border-radius:50%; background:var(--ok);
+                  box-shadow:0 0 8px var(--ok); animation:flow 2.6s linear infinite; animation-delay:var(--d,0s); }
+  .arrow.off::after { display:none; }
+  @keyframes flow { 0% { left:0; opacity:0; } 15% { opacity:1; } 85% { opacity:1; } 100% { left:calc(100% - 6px); opacity:0; } }
+  .jar { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,8.5rem),1fr)); gap:1.2vh 1.6vw;
+         border-top:1px solid var(--line); padding-top:1.1vh; }
+  .stat { min-width:0; }
+  .stat .k { display:flex; align-items:center; gap:.45em; color:var(--muted); font-size:min(1.1vw,1.55vh); letter-spacing:.04em; margin-bottom:.4vh; }
+  .stat .k .dot { width:.5em; height:.5em; }
+  .stat .v { font-size:min(1.35vw,1.9vh); line-height:1.3; overflow-wrap:break-word; }
+  .stat .v small { color:var(--muted); font-size:.85em; }
+  .evbar { margin-top:.7vh; }
   .dot { width:.6em; height:.6em; border-radius:50%; background:var(--off); flex:none; }
   .ok .main .dot, .dot.ok { background:var(--ok); box-shadow:0 0 12px var(--ok); animation:breathe 4s ease-in-out infinite; }
   .warn .main .dot, .dot.warn { background:var(--warn); box-shadow:0 0 12px var(--warn); }
@@ -128,69 +171,115 @@ function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<
 function ago(iso){ if(!iso) return '—'; let s=Math.max(0,(Date.now()-new Date(iso))/1000);
   const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
   return d? `${d}d ${h}h` : h? `${h}h ${m}m` : `${m}m ${Math.floor(s%60)}s`; }
-function card(title, level, main, rows, extra='', cls=''){
-  return {level, html:(i)=>`<section class="card ${level} ${cls}" style="--i:${i}"><h2>${esc(title)}</h2><div class="main"><span class="dot"></span>${esc(main)}</div>
-  ${rows.length?`<dl class="rows">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`:''}${extra}</section>`}; }
-function bar(pct){ pct=Math.max(0,Math.min(100,pct||0)); const c = pct>90?'var(--bad)':pct>75?'var(--warn)':'var(--ok)';
-  return `<div class="bar"><i style="width:${pct}%;background:${c}"></i></div>`; }
+// Values with no spaces (addresses, accounts, paths) may break only after . / @ \ : - — never mid-word.
+function val(v){ const s = String(v ?? ''), e = esc(s); return !/\s/.test(s) && s.length > 14 ? e.replace(/([./@\\:-])/g, '$1<wbr>') : e; }
+// card(title, level, main, rows, {sub, pre, extra, cls}): sub = small text after the headline,
+// pre = graphics between the headline and the rows, extra = anything after the rows.
+function card(title, level, main, rows = [], o = {}){
+  return {level, html:(i)=>`<section class="card ${level} ${o.cls||''}" style="--i:${i}"><h2>${esc(title)}</h2>
+  <div class="main"><span class="dot"></span><span>${esc(main)}</span>${o.sub?`<small>${esc(o.sub)}</small>`:''}</div>${o.pre||''}
+  ${rows.length?`<dl class="rows">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${val(v)}</dd>`).join('')}</dl>`:''}${o.extra||''}</section>`}; }
+const lvl = (pct, warn, bad) => pct > bad ? 'bad' : pct > warn ? 'warn' : 'ok';
+const col = l => `var(--${l})`;
+function bar(pct, warn = 75, bad = 90){ pct = Math.max(0, Math.min(100, pct || 0));
+  return `<div class="bar"><i style="width:${pct}%;background:${col(lvl(pct, warn, bad))}"></i></div>`; }
 const short = v => { v = String(v ?? ''); return /^[0-9a-f]{12,}$/i.test(v) ? v.slice(0, 7) : v; };
 
+/* ---------------- small graphics: rings, sparklines, status chips, icons ---------------- */
+function ring(pct, label, warn = 75, bad = 90){
+  pct = Math.max(0, Math.min(100, pct || 0));
+  return `<div class="ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5" class="track"/>
+    <circle cx="18" cy="18" r="15.5" pathLength="100" stroke="${col(lvl(pct, warn, bad))}" stroke-dasharray="${pct.toFixed(1)} 100"/></svg>
+    <div class="lbl">${Math.round(pct)}%<small>${esc(label)}</small></div></div>`; }
+// History of a few numbers (last 10 min at one poll per 10 s), recorded on each poll, drawn as sparklines.
+const hist = {};
+function track(k, v){ const a = hist[k] = hist[k] || []; if (v == null || isNaN(v)) return; a.push(+v); if (a.length > 60) a.shift(); }
+// max = top of the scale (0 = fit to the data); level = colour of the line ('ok' / 'warn' / 'bad').
+function spark(k, title, now, max, level){
+  const a = hist[k] || []; if (!a.length) return '';
+  const top = max || Math.max(300, ...a) * 1.2, c = col(level || 'ok');
+  const pts = (a.length === 1 ? [a[0], a[0]] : a).map((v, i, arr) => `${(i / (arr.length - 1) * 100).toFixed(1)},${(22 - Math.min(1, v / top) * 19).toFixed(1)}`).join(' ');
+  return `<div class="spk"><div class="spk-h"><span>${esc(title)}</span><b>${esc(now)}</b></div>
+    <svg viewBox="0 0 100 24" preserveAspectRatio="none"><polygon points="0,24 ${pts} 100,24" fill="${c}" opacity=".16"/>
+    <polyline points="${pts}" fill="none" stroke="${c}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg></div>`; }
+const chips = list => `<div class="chips">${list.map(([t, l]) => `<span class="chip"><span class="dot ${l}"></span>${esc(t)}</span>`).join('')}</div>`;
+const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ICON = {
+  globe:  svg('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9M12 3c-2.5 2.6-3.8 5.6-3.8 9s1.3 6.4 3.8 9"/>'),
+  server: svg('<rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/><path d="M8 7.5h.01M8 16.5h.01"/>'),
+  worker: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>'),
+  ai:     svg('<rect x="7" y="7" width="10" height="10" rx="2"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/>'),
+};
+
 /* ---------------- Jar card (from Jar's read-only /v1/monitor) ---------------- */
-// Two columns in the same label/value style as the other cards: services (with a status dot) and
-// details (plain info). Values are kept short and wrap instead of being cut off — no hover on a kiosk.
+// A request's path as a flow diagram — internet → Funnel → Server → Worker → Ollama — then the details.
 function jarCard(w){
-  const m = w.monitor, svc = [], info = [];
+  const m = w.monitor, nodes = [], info = [];
   let level = w.ok ? (w.ms > 3000 ? 'warn' : 'ok') : 'bad';
-  const lines = v => (Array.isArray(v) ? v : [v]).filter(x => x !== '' && x != null).map(esc).join('<br>') || '—';
-  const service = (name, ok, val) => { svc.push([`<span class="dot ${ok===null?'':ok?'ok':'bad'}"></span>${esc(name)}`, lines(val)]);
-                                       if (ok === false && level === 'ok') level = 'warn'; };
-  const detail = (name, val) => info.push([esc(name), lines(val)]);
-  let main = w.ok ? `Online · ${w.ms} ms` : 'Down';
+  const lines = v => (Array.isArray(v) ? v : [v]).filter(x => x !== '' && x != null && x !== false && x !== 0).map((x, i) => i ? `<small>${val(x)}</small>` : val(x)).join('<br>') || '—';
+  const node = (name, icon, ok, v) => { nodes.push({name, icon, st: ok === null ? 'off' : ok ? 'ok' : 'bad', v});
+                                         if (ok === false && level === 'ok') level = 'warn'; };
+  const detail = (name, v, st) => info.push([(st !== undefined ? `<span class="dot ${st}"></span>` : '') + esc(name), lines(v)]);
+  let main = w.ok ? 'Online' : 'Down', extra = '', pre = '';
   if (m) {
     const s = m.supervisor||{}, wk = m.worker||{}, ol = m.ollama||{}, fn = m.funnel||{}, ev = m.eval;
-    service('Server', true, m.app_version ? 'v' + m.app_version : 'running');
-    service('Supervisor', !!s.alive, [short(s.code) || (s.alive ? 'running' : 'not running'), s.update && 'update waiting', s.restarts && `${s.restarts} restarts`]);
-    service('Worker', !!wk.alive, wk.doing || (wk.alive ? 'Idle' : 'Not running'));
-    service('Ollama', !!ol.up, ol.up ? ((ol.loaded||[]).length ? ol.loaded : 'Up · idle') : 'Not reachable');
-    if (fn.wanted !== undefined) service('Funnel', fn.wanted ? !!fn.ok : null, fn.wanted ? (fn.ok ? 'Public' : (fn.problem||'Problem')) : 'Off');
-    detail('Models', [wk.llm, wk.whisper].filter(Boolean).map(x => String(x).split('/').pop()));   // drop "org/" prefixes
+    if (fn.wanted !== undefined) node('Funnel', 'globe', fn.wanted ? !!fn.ok : null, fn.wanted ? (fn.ok ? 'Public' : (fn.problem||'Problem')) : 'Off');
+    node('Server', 'server', true, m.app_version ? 'v' + m.app_version : 'Running');
+    node('Worker', 'worker', !!wk.alive, wk.doing || (wk.alive ? 'Idle' : 'Not running'));
+    node('Ollama', 'ai', !!ol.up, ol.up ? ((ol.loaded||[]).length ? ol.loaded.join(', ') : 'Idle') : 'Not reachable');
+    if (!s.alive && level === 'ok') level = 'warn';
+    detail('Supervisor', [short(s.code) || (s.alive ? 'Running' : 'Not running'), s.update && 'update waiting', s.restarts && `${s.restarts} restarts`], s.alive ? 'ok' : 'bad');
     const c = m.memos||{}, total = Object.values(c).reduce((a,b)=>a+b,0);
-    const odd = Object.entries(c).filter(([k])=>!/^(done|filed|ok|processed)$/i.test(k)).map(([k,v])=>`${v} ${k}`);
-    detail('Memos', [`${total} recent`, ...odd]);
-    if (ev && ev.total) { detail('AI test', [`${ev.passed}/${ev.total}${ev.passed === ev.total ? ' ✓' : ''}`, ev.model]);
-                          if (ev.passed !== ev.total && level === 'ok') level = 'warn'; }
-    if (level === 'ok') main = `All parts running · ${w.ms} ms`;
+    detail('Memos', [`${total} recent`, ...Object.entries(c).filter(([k])=>!/^(done|filed|ok|processed)$/i.test(k)).map(([k,v])=>`${v} ${k}`)]);
+    detail('Models', [wk.llm, wk.whisper].filter(Boolean).map(x => String(x).split('/').pop()));   // drop "org/" prefixes
+    if (ev && ev.total) { const p = ev.passed / ev.total * 100;
+      detail('AI test', [`${ev.passed}/${ev.total}${ev.passed === ev.total ? ' ✓' : ''}`, ev.model]);
+      if (ev.passed !== ev.total && level === 'ok') level = 'warn';
+      extra = `<div class="bar evbar"><i style="width:${p}%;background:${col(p === 100 ? 'ok' : p >= 90 ? 'warn' : 'bad')}"></i></div>`; }
+    if (level === 'ok') main = 'All parts running';
     else if (w.ok) main = 'Running, with a problem';
+    pre = `<div class="flow">${nodes.map((n, i) => (i ? `<i class="arrow ${n.st === 'ok' && nodes[i-1].st === 'ok' ? '' : 'off'}" style="--d:${i * .45}s"></i>` : '') +
+      `<div class="node ${n.st}"><div class="ic">${ICON[n.icon]}</div><b>${esc(n.name)}</b><span>${val(n.v)}</span></div>`).join('')}</div>`;
   } else if (w.ok && w.monitorErr) { detail('Details', `Not available (${w.monitorErr})`); }
   else if (w.ok) { detail('Details', 'Add "monitorKey" in config.json to see every part'); }
-  if (!w.ok) service('Error', false, w.err || ('HTTP ' + w.code));
-  const col = (title, rows) => rows.length ? `<div class="jar-col"><h3>${title}</h3><dl class="rows">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div>` : '';
-  return card(w.name || 'Jar', level, main, [], `<div class="jar">${col('Services', svc)}${col('Details', info)}</div>`, 'wide');
+  if (!w.ok) detail('Error', w.err || ('HTTP ' + w.code), 'bad');
+  pre += `<div class="jar">${info.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${k.endsWith('AI test') ? extra : ''}</div>`).join('')}</div>`;
+  return card(w.name || 'Jar', level, main, [], {sub: w.ok ? `${w.ms} ms` : '', pre, cls: 'wide'});
 }
 
 /* ---------------- render ---------------- */
+function record(d){   // once per poll, so re-rendering the same data doesn't add points
+  track('pc', d.host && d.host.cpu); track('vm', d.vm && d.vm.running ? d.vm.cpu : null);
+  for (const w of (d.web||[])) track('web:' + w.name, w.ok ? w.ms : null);
+}
 function render(d){
   const cards=[]; status=[];
   const add = (c, label) => { cards.push(c); if (c.level) status.push({label, level:c.level}); };
   const ha=d.ha||{};
   const hl = ha.core==='running' && ha.health==='Healthy' ? 'ok' : ha.core==='running' ? 'warn' : ha.core==='starting' || ha.supervisor==='Connected' ? 'warn' : 'bad';
   const hm = ha.core==='running' ? (ha.health==='Healthy'?'Running':'Running · '+ha.health) : ha.core==='starting' ? 'Starting…' : ha.supervisor==='Connected' ? 'Core not up yet' : 'Not reachable';
-  add(card('Home Assistant', hl, hm, [['Core', ha.core], ['Supervisor', ha.supervisor], ['Health', ha.health], ['Address', ha.url||'']]), 'Home Assistant');
+  const st = (name, v, good) => [v === good ? name : `${name}: ${v || '—'}`, v === good ? 'ok' : v ? 'warn' : 'bad'];
+  add(card('Home Assistant', hl, hm, [['Address', (ha.url||'').replace(/^https?:\/\//, '').replace(/\/$/, '')]],
+    {pre: chips([st('Core', ha.core, 'running'), st('Supervisor', ha.supervisor, 'Connected'), st('Healthy', ha.health, 'Healthy')])}), 'Home Assistant');
 
   const vm=d.vm||{};
   add(card('HA virtual machine', vm.running?'ok':'bad', vm.running?'Running':'Stopped',
     [['Process', vm.process||'not running'], ['Memory', vm.running? (vm.memMB/1024).toFixed(1)+' GB'+(vm.allocMB?` / ${(vm.allocMB/1024).toFixed(1)} GB`:''):'—'],
-     ['CPU', vm.running? vm.cpu+' %':'—'], ['Up for', vm.started? ago(vm.started):'—']], vm.running?bar(vm.cpu):''), 'VM');
+     ['Up for', vm.started? ago(vm.started):'—']],
+    {pre: vm.running ? spark('vm', 'CPU · 10 min', vm.cpu + ' %', 100, lvl(vm.cpu, 75, 90)) : ''}), 'VM');
 
   const as=d.autostart||{};
   // VirtualBox's Windows autostart service starts the VMs at boot and then exits, so "Stopped" is normal.
   const al = !as.installed || as.startType!=='Automatic' ? 'warn' : 'ok';
-  add(card('VM autostart service', al, !as.installed ? 'Not installed' : as.startType!=='Automatic' ? 'Not set to start at boot' : as.status==='Running' ? 'Starting VMs…' : 'Ready for next boot',
-    as.installed?[['Start type', as.startType],['Service now', as.status],['Account', (as.name||'').replace(/^VirtualBox Autostart Service\s*/,'')]]:[['Effect','HA won’t start by itself after reboot']]), 'Autostart');
+  add(card('VM autostart', al, !as.installed ? 'Not installed' : as.startType!=='Automatic' ? 'Not set to start at boot' : as.status==='Running' ? 'Starting VMs…' : 'Ready',
+    as.installed ? [['Service now', as.status], ['Account', (as.name||'').replace(/^VirtualBox Autostart Service\s*/,'')]] : [['Effect','HA won’t start by itself after reboot']],
+    {sub: al === 'ok' && as.status !== 'Running' ? 'for next boot' : '', pre: as.installed ? chips([['Starts at boot', as.startType === 'Automatic' ? 'ok' : 'warn']]) : ''}), 'Autostart');
 
   const h=d.host||{}; const memPct = h.memTotalGB? h.memUsedGB/h.memTotalGB*100 : 0;
-  add(card('This PC', memPct>92 || (h.diskFreeGB!=null && h.diskFreeGB<10) ? 'warn' : 'ok', `CPU ${h.cpu??'—'}% · RAM ${Math.round(memPct)}%`,
-    [['Memory', `${h.memUsedGB} / ${h.memTotalGB} GB`], ['Disk C: free', `${h.diskFreeGB} / ${h.diskTotalGB} GB`], ['Up since boot', ago(h.boot)]], bar(memPct)), 'PC');
+  const diskPct = h.diskTotalGB ? (h.diskTotalGB - h.diskFreeGB) / h.diskTotalGB * 100 : 0, low = memPct>92 || (h.diskFreeGB!=null && h.diskFreeGB<10);
+  add(card('This PC', low ? 'warn' : 'ok', low ? 'Low on resources' : 'Normal',
+    [['Memory', `${h.memUsedGB} / ${h.memTotalGB} GB`], ['Disk free', `${h.diskFreeGB} GB`], ['Uptime', ago(h.boot)]],
+    {pre: `<div class="rings">${ring(h.cpu, 'CPU')}${ring(memPct, 'RAM', 80, 92)}${ring(diskPct, 'Disk', 85, 92)}</div>` + spark('pc', 'CPU · 10 min', (h.cpu ?? '—') + ' %', 100, lvl(h.cpu, 75, 90))}), 'PC');
 
   const ts=d.tailscale||{};
   if(ts.installed) add(card('Tailscale', ts.state==='Running'?'ok':'warn', ts.state==='Running'?'Connected':ts.state, [['Tailnet IP', ts.ip||'—'], ['Devices online', ts.peers!=null?`${ts.peersOnline} / ${ts.peers}`:'—']]), 'Tailscale');
@@ -199,13 +288,15 @@ function render(d){
     if (w.err==='not configured') { cards.push(card(w.name, '', 'Not set up', [['', 'Add its address in C:\\HA\\status\\config.json']])); continue; }
     if (w.kind==='jar') { add(jarCard(w), 'Jar'); continue; }
     let host=''; try{ host=new URL(w.url).host; }catch(e){}
-    add(card(w.name, w.ok ? (w.ms>3000?'warn':'ok') : 'bad', w.ok ? `Online · ${w.ms} ms` : 'Down',
-      [['Through', 'Tailscale Funnel (internet)'], ['Address', host], ...(w.ok?[]:[['Error', w.err||('HTTP '+w.code)]])]), /tunnel|remote/i.test(w.name)?'Tunnel':w.name);
+    add(card(w.name, w.ok ? (w.ms>3000?'warn':'ok') : 'bad', w.ok ? 'Online' : 'Down',
+      [['Via', 'Tailscale'], ['Address', host], ...(w.ok?[]:[['Error', w.err||('HTTP '+w.code)]])],
+      {pre: spark('web:' + w.name, 'Response · 10 min', w.ok ? w.ms + ' ms' : '—', 0, !w.ok ? 'bad' : w.ms > 3000 ? 'warn' : 'ok')}), /tunnel|remote/i.test(w.name)?'Tunnel':w.name);
   }
   const mc=d.minecraft||[];
   if(!mc.length) cards.push(card('Minecraft', '', 'Not set up', [['', 'Add the server in C:\\HA\\status\\config.json']]));
   for(const s of mc) add(card('Minecraft · '+(s.name||s.host), s.online?'ok':'bad', s.online?`${s.players} / ${s.max} players`:'Offline',
-      s.online? [['Version', s.version], ['Ping', s.ms+' ms'], ['Who', (s.who||[]).join(', ')||'—']] : [['Address', `${s.host}:${s.port}`], ['Error', s.err||'']]), 'Minecraft');
+      s.online? [['Version', s.version], ['Ping', s.ms+' ms'], ['Who', (s.who||[]).join(', ')||'—']] : [['Address', `${s.host}:${s.port}`], ['Error', s.err||'']],
+      {pre: s.online && s.max ? bar(s.players / s.max * 100, 101, 101) : ''}), 'Minecraft');
 
   // Problems first; the rest rotate their places each time the dashboard comes back (burn-in).
   const rank = l => l==='bad'?0:l==='warn'?1:l?2:3;   // not-set-up cards go last
@@ -391,7 +482,7 @@ const FX = (() => {
 async function poll(){
   try { const r = await fetch('/api',{cache:'no-store'}); last = await r.json(); lastOk = Date.now();
     if (ver && last.version && last.version !== ver) { location.reload(); return; }
-    ver = last.version || ver; render(last); setBg(last.bg); }
+    ver = last.version || ver; record(last); render(last); setBg(last.bg); }
   catch(e){ $('overall').innerHTML = '<span class="dot bad"></span>Status service not responding'; worst = 'bad';
             $('aline').innerHTML = '<span class="it"><span class="dot bad"></span>Status service not responding</span>'; }
 }
