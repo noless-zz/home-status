@@ -2,3 +2,4 @@ config.json
 status.log
 status.log.old
 bg/
+kiosk-off

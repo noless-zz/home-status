@@ -15,6 +15,8 @@ Plain PowerShell 5.1 + one HTML page. No installs besides Git.
 | `config.example.json` | Template. Copy to `config.json` (kept out of Git) and fill in your addresses. |
 | `start-status.bat` | Starts the server and opens the board in Edge kiosk mode. |
 | `install-for-this-user.bat` | Run once as the board's account: adds `start-status.bat` to its Startup folder. |
+| `kiosk-shell.ps1` | Optional locked-down shell for the kiosk account (replaces Explorer). |
+| `install-kiosk.cmd` / `uninstall-kiosk.cmd` | Turn that shell on/off for the account that runs them. |
 | `safe-restart.bat` | Shuts the HA VM down cleanly, then restarts Windows. |
 
 ## Install (once)
@@ -54,3 +56,12 @@ A JSON mistake keeps the previous settings and is logged in `status.log`.
 - `vmMemoryMB`: optional, the RAM given to the VM, shown next to its usage.
 
 Keep hostnames and other private details in `config.json` only; this repository is public.
+
+## Locked-down kiosk (optional)
+
+Signed in as the kiosk account, run `C:\HA\status\install-kiosk.cmd`, then sign out and in.
+Explorer is replaced by `kiosk-shell.ps1`: no Start menu, taskbar, desktop or Task Manager, and the
+board (and its server) are restarted if closed. Ctrl+Alt+Del still offers Switch user and Sign out.
+
+To undo: from another account create `C:\HA\status\kiosk-off`, sign the kiosk account in (a File
+Explorer window opens instead of the board), run `uninstall-kiosk.cmd`, delete `kiosk-off`, sign out and in.
