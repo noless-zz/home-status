@@ -5,139 +5,397 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Home Status</title>
 <style>
-  :root { --bg:#0e1116; --card:#171b22; --line:#262c36; --text:#e8ecf2; --muted:#8a94a6;
-          --ok:#3ecf8e; --warn:#f5b84b; --bad:#ff5d5d; --off:#5b6474; }
+  :root { --text:#eef1f6; --muted:#a3adbd; --line:rgba(255,255,255,.10);
+          --ok:#3ecf8e; --warn:#f5b84b; --bad:#ff5d5d; --off:#7b8496; --drift:30s; }
   * { box-sizing:border-box; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--text); overflow:hidden;
+  html,body { margin:0; height:100%; overflow:hidden; background:#0b0e13; color:var(--text);
               font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; cursor:none; }
-  .wrap { padding:3vh 3vw; height:100%; display:flex; flex-direction:column; gap:2.5vh; }
+
+  /* ---- background photo: two layers crossfade, each slowly pans and zooms (Ken Burns) ---- */
+  .bg { position:fixed; inset:-6%; background:center/cover no-repeat; opacity:0; z-index:0;
+        transition:opacity 3.5s ease; will-change:transform, opacity, filter; }
+  .bg.show { opacity:1; }
+  .bg.kb { animation:kb var(--kbdur,80s) ease-in-out infinite alternate; }
+  @keyframes kb { from { transform:translate(var(--x0),var(--y0)) scale(var(--s0)); }
+                  to   { transform:translate(var(--x1),var(--y1)) scale(var(--s1)); } }
+  #fx { position:fixed; inset:0; z-index:1; pointer-events:none; }
+  .shade { position:fixed; inset:0; z-index:2; pointer-events:none; transition:opacity 2s ease;
+           background:linear-gradient(180deg, rgba(6,8,12,.55) 0%, rgba(6,8,12,.25) 40%, rgba(6,8,12,.70) 100%); }
+  body.amb .shade { opacity:.55; }
+  #night { position:fixed; inset:0; z-index:5; pointer-events:none; background:#000; opacity:0; transition:opacity 6s ease; }
+  body.night #night { opacity:.45; }
+  #flash { position:fixed; inset:0; z-index:4; pointer-events:none; background:#dfe8ff; opacity:0; }
+
+  /* ---- everything on top drifts a few pixels now and then (burn-in protection) ---- */
+  #stage { position:fixed; inset:0; z-index:3; transition:transform var(--drift) linear; }
+  .view { position:absolute; inset:0; transition:opacity 1.4s ease, filter 1.4s ease, transform 1.4s ease; }
+  body.amb #dash, body:not(.amb) #amb { opacity:0; filter:blur(12px); transform:scale(.985); pointer-events:none; }
+
+  /* ---- dashboard view ---- */
+  #dash { padding:3vh 3vw; display:flex; flex-direction:column; gap:2.4vh; }
   header { display:flex; justify-content:space-between; align-items:flex-end; }
   .clock { font-size:min(9vw,12vh); font-weight:300; line-height:1; letter-spacing:-.02em; }
   .date { color:var(--muted); font-size:min(2.2vw,3vh); margin-top:.6vh; }
   .overall { text-align:right; }
   .overall .big { font-size:min(3.2vw,4.5vh); font-weight:600; display:flex; align-items:center; gap:.6em; justify-content:flex-end; }
   .overall .small { color:var(--muted); font-size:min(1.6vw,2.2vh); margin-top:.5vh; }
-  .grid { flex:1; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr)); gap:2vh 1.5vw; align-content:start; }
-  .bg { position:fixed; inset:0; background:center/cover no-repeat; opacity:0; transition:opacity 2.5s ease; z-index:0; }
-  .bg.show { opacity:1; }
-  .shade { position:fixed; inset:0; z-index:1; pointer-events:none;
-           background:linear-gradient(180deg, rgba(8,10,14,.55) 0%, rgba(8,10,14,.30) 40%, rgba(8,10,14,.70) 100%); }
-  .wrap { position:relative; z-index:2; }
-  .clock, .date, .overall { text-shadow:0 2px 12px rgba(0,0,0,.6); }
-  .card { backdrop-filter:blur(14px) saturate(1.1); -webkit-backdrop-filter:blur(14px);
-          background:rgba(20,24,31,.66) !important; }
-  footer span { text-shadow:0 1px 6px rgba(0,0,0,.8); }
-  #photo { max-width:45vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:2.2vh 1.6vw; border-left:6px solid var(--off); }
+  .clock, .date, .overall, .amb-clock, .amb-date, .amb-line { text-shadow:0 2px 14px rgba(0,0,0,.65); }
+  .grid { flex:1; display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,21rem),1fr));
+          gap:2vh 1.4vw; align-content:start; }
+  .card { position:relative; overflow:hidden; border-radius:16px; padding:2.1vh 1.5vw;
+          background:rgba(18,22,30,.62); border:1px solid var(--line); border-left:6px solid var(--off);
+          backdrop-filter:blur(16px) saturate(1.15); -webkit-backdrop-filter:blur(16px) saturate(1.15); }
+  .card.wide { grid-column:span 2; }
   .card.ok { border-left-color:var(--ok); } .card.warn { border-left-color:var(--warn); } .card.bad { border-left-color:var(--bad); }
-  .card h2 { margin:0; font-size:min(1.5vw,2.1vh); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:600; }
-  .main { font-size:min(2.6vw,3.6vh); font-weight:600; margin:1vh 0 1.2vh; display:flex; align-items:center; gap:.5em; }
-  .rows { display:grid; grid-template-columns:auto minmax(0,1fr); gap:.5vh 1.2em; font-size:min(1.5vw,2.1vh); }
+  .card::after { content:""; position:absolute; inset:0; pointer-events:none; opacity:.0;
+                 background:linear-gradient(105deg, transparent 40%, rgba(255,255,255,.10) 50%, transparent 60%);
+                 background-size:250% 100%; animation:sheen 11s ease-in-out infinite; animation-delay:calc(var(--i,0) * 1.3s); }
+  @keyframes sheen { 0%,70% { opacity:0; background-position:120% 0; } 75% { opacity:1; } 100% { opacity:0; background-position:-120% 0; } }
+  .grid.enter .card { animation:rise .9s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(var(--i,0) * 80ms); }
+  @keyframes rise { from { opacity:0; transform:translateY(24px) scale(.97); filter:blur(6px); } to { opacity:1; transform:none; filter:none; } }
+  .card h2 { margin:0; font-size:min(1.45vw,2vh); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:600; }
+  .main { font-size:min(2.5vw,3.5vh); font-weight:600; margin:1vh 0 1.2vh; display:flex; align-items:center; gap:.5em; }
+  .rows { display:grid; grid-template-columns:auto minmax(0,1fr); gap:.5vh 1.2em; font-size:min(1.45vw,2vh); margin:0; }
   .rows dt { color:var(--muted); } .rows dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; min-width:0; }
+  .parts { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,14rem),1fr)); gap:1vh 1.4vw; font-size:min(1.4vw,1.95vh); }
+  .part { display:flex; align-items:baseline; gap:.55em; min-width:0; }
+  .part .dot { width:.55em; height:.55em; align-self:center; }
+  .part b { font-weight:600; white-space:nowrap; }
+  .part span.v { color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .dot { width:.6em; height:.6em; border-radius:50%; background:var(--off); flex:none; }
-  .ok .dot, .dot.ok { background:var(--ok); box-shadow:0 0 12px var(--ok); }
-  .warn .dot, .dot.warn { background:var(--warn); box-shadow:0 0 12px var(--warn); }
-  .bad .dot, .dot.bad { background:var(--bad); box-shadow:0 0 12px var(--bad); animation:pulse 1.4s infinite; }
-  .bar { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:.4vh; }
-  .bar i { display:block; height:100%; background:var(--ok); }
-  @keyframes pulse { 50% { opacity:.35; } }
-  footer { color:var(--muted); font-size:min(1.3vw,1.8vh); display:flex; justify-content:space-between; }
+  .ok .main .dot, .dot.ok { background:var(--ok); box-shadow:0 0 12px var(--ok); animation:breathe 4s ease-in-out infinite; }
+  .warn .main .dot, .dot.warn { background:var(--warn); box-shadow:0 0 12px var(--warn); }
+  .bad .main .dot, .dot.bad { background:var(--bad); box-shadow:0 0 14px var(--bad); animation:pulse 1.2s infinite; }
+  @keyframes breathe { 50% { box-shadow:0 0 4px var(--ok); opacity:.75; } }
+  @keyframes pulse { 50% { opacity:.3; } }
+  .bar { height:6px; background:rgba(255,255,255,.10); border-radius:3px; overflow:hidden; margin-top:.6vh; }
+  .bar i { display:block; height:100%; transition:width 1.5s ease; }
+  footer { color:var(--muted); font-size:min(1.25vw,1.75vh); display:flex; justify-content:space-between; gap:2vw; }
+  footer span { text-shadow:0 1px 6px rgba(0,0,0,.85); }
+  .photo { max-width:45vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ---- ambient (screen-saver) view: big clock that wanders, a line of status dots ---- */
+  #amb .float { position:absolute; left:var(--ax,10%); top:var(--ay,20%); transition:opacity 1.6s ease; }
+  #amb .float.hide { opacity:0; }
+  .amb-clock { font-size:min(15vw,22vh); font-weight:200; line-height:.95; letter-spacing:-.03em; }
+  .amb-date { font-size:min(2.6vw,3.6vh); color:#dfe5ee; margin-top:1vh; }
+  .amb-line { display:flex; flex-wrap:wrap; gap:.9em 1.6em; margin-top:2.6vh; font-size:min(1.8vw,2.5vh); color:#dfe5ee; }
+  .amb-line .it { display:flex; align-items:center; gap:.45em; }
+  .amb-photo { margin-top:1.6vh; font-size:min(1.3vw,1.8vh); color:var(--muted); max-width:60vw; }
 </style>
 </head>
-<body>
-<div class="bg" id="bgA"></div><div class="bg" id="bgB"></div><div class="shade"></div>
-<div class="wrap">
-  <header>
-    <div><div class="clock" id="clock">--:--</div><div class="date" id="date"></div></div>
-    <div class="overall"><div class="big" id="overall"><span class="dot"></span>Checking…</div><div class="small" id="updated"></div></div>
-  </header>
-  <div class="grid" id="grid"></div>
-  <footer><span id="hostname"></span><span id="photo"></span><span>Ctrl+Alt+Del → Switch user to use this PC</span></footer>
+<body class="amb">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="warp" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+    <feTurbulence id="turb" type="fractalNoise" baseFrequency="0.01 0.02" numOctaves="2" seed="4" result="n"/>
+    <feDisplacementMap id="disp" in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+<div class="bg" id="bgA"></div><div class="bg" id="bgB"></div>
+<canvas id="fx"></canvas>
+<div class="shade"></div>
+<div id="flash"></div>
+<div id="stage">
+  <div class="view" id="dash">
+    <header>
+      <div><div class="clock" id="clock">--:--</div><div class="date" id="date"></div></div>
+      <div class="overall"><div class="big" id="overall"><span class="dot"></span>Checking…</div><div class="small" id="updated"></div></div>
+    </header>
+    <div class="grid" id="grid"></div>
+    <footer><span id="hostname"></span><span class="photo" id="photo"></span><span>Ctrl+Alt+Del → Switch user to use this PC</span></footer>
+  </div>
+  <div class="view" id="amb">
+    <div class="float" id="float">
+      <div class="amb-clock" id="aclock">--:--</div>
+      <div class="amb-date" id="adate"></div>
+      <div class="amb-line" id="aline"></div>
+      <div class="amb-photo" id="aphoto"></div>
+    </div>
+  </div>
 </div>
+<div id="night"></div>
 <script>
 const $ = id => document.getElementById(id);
-let last = null, lastOk = 0, ver = null;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const Q = new URLSearchParams(location.search);   // ?fx=rain|wind|fire|snow|fireflies  ?view=amb|dash (testing)
+const DASH_MS = 100e3, AMB_MS = 260e3, NIGHT = [23, 6];   // view times; night hours (dimmer, calmer)
+let last = null, lastOk = 0, ver = null, worst = 'ok', status = [], order = 0;
+
 function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function ago(iso){ if(!iso) return '—'; let s=Math.max(0,(Date.now()-new Date(iso))/1000);
   const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
   return d? `${d}d ${h}h` : h? `${h}h ${m}m` : `${m}m ${Math.floor(s%60)}s`; }
-function card(title, level, main, rows, extra=''){
-  return `<section class="card ${level}"><h2>${esc(title)}</h2><div class="main"><span class="dot"></span>${esc(main)}</div>
-  <dl class="rows">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${extra}</section>`; }
+function card(title, level, main, rows, extra='', cls=''){
+  return {level, html:(i)=>`<section class="card ${level} ${cls}" style="--i:${i}"><h2>${esc(title)}</h2><div class="main"><span class="dot"></span>${esc(main)}</div>
+  ${rows.length?`<dl class="rows">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`:''}${extra}</section>`}; }
 function bar(pct){ pct=Math.max(0,Math.min(100,pct||0)); const c = pct>90?'var(--bad)':pct>75?'var(--warn)':'var(--ok)';
   return `<div class="bar"><i style="width:${pct}%;background:${c}"></i></div>`; }
+const short = v => { v = String(v ?? ''); return /^[0-9a-f]{12,}$/i.test(v) ? v.slice(0, 7) : v; };
 
+/* ---------------- Jar card (from Jar's read-only /v1/monitor) ---------------- */
+function jarCard(w){
+  const m = w.monitor, parts = [];
+  let level = w.ok ? (w.ms > 3000 ? 'warn' : 'ok') : 'bad';
+  const part = (name, ok, val) => { parts.push(`<div class="part"><span class="dot ${ok===null?'':ok?'ok':'bad'}"></span><b>${esc(name)}</b><span class="v">${esc(val)}</span></div>`);
+                                     if (ok === false && level === 'ok') level = 'warn'; };
+  let main = w.ok ? `Online · ${w.ms} ms` : 'Down';
+  if (m) {
+    const s = m.supervisor||{}, wk = m.worker||{}, ol = m.ollama||{}, fn = m.funnel||{}, ev = m.eval;
+    part('Server', true, `app ${m.app_version||'?'}`);
+    part('Supervisor', !!s.alive, `code ${short(s.code)||'?'}${s.update?' · update waiting':''}${s.restarts?` · ${s.restarts} restarts`:''}`);
+    part('Worker', !!wk.alive, wk.doing || (wk.alive?'idle':'not running'));
+    part('Ollama', !!ol.up, ol.up ? ((ol.loaded||[]).join(', ') || 'up, no model loaded') : 'not reachable');
+    part('Models', null, [wk.llm, wk.whisper].filter(Boolean).join(' · ') || '—');
+    if (fn.wanted !== undefined) part('Funnel', fn.wanted ? !!fn.ok : null, fn.wanted ? (fn.ok ? 'reachable from the internet' : (fn.problem||'problem')) : 'off');
+    const c = m.memos||{}, total = Object.values(c).reduce((a,b)=>a+b,0);
+    const odd = Object.entries(c).filter(([k])=>!/^(done|filed|ok|processed)$/i.test(k)).map(([k,v])=>`${v} ${k}`).join(', ');
+    part('Memos', null, `${total} recent${odd?' · '+odd:''}`);
+    if (ev && ev.total) part('AI test', ev.passed === ev.total, `${ev.passed}/${ev.total}${ev.model?' · '+ev.model:''}`);
+    if (level === 'ok') main = `All parts running · ${w.ms} ms`;
+    else if (w.ok) main = 'Running, with a problem';
+  } else if (w.ok && w.monitorErr) { part('Details', null, `not available (${w.monitorErr})`); }
+  else if (w.ok) { part('Details', null, 'add "monitorKey" in config.json to see every part'); }
+  if (!w.ok) part('Error', false, w.err || ('HTTP ' + w.code));
+  return card(w.name || 'Jar', level, main, [], `<div class="parts">${parts.join('')}</div>`, 'wide');
+}
+
+/* ---------------- render ---------------- */
+function render(d){
+  const cards=[]; status=[];
+  const add = (c, label) => { cards.push(c); if (c.level) status.push({label, level:c.level}); };
+  const ha=d.ha||{};
+  const hl = ha.core==='running' && ha.health==='Healthy' ? 'ok' : ha.core==='running' ? 'warn' : ha.core==='starting' || ha.supervisor==='Connected' ? 'warn' : 'bad';
+  const hm = ha.core==='running' ? (ha.health==='Healthy'?'Running':'Running · '+ha.health) : ha.core==='starting' ? 'Starting…' : ha.supervisor==='Connected' ? 'Core not up yet' : 'Not reachable';
+  add(card('Home Assistant', hl, hm, [['Core', ha.core], ['Supervisor', ha.supervisor], ['Health', ha.health], ['Address', ha.url||'']]), 'Home Assistant');
+
+  const vm=d.vm||{};
+  add(card('HA virtual machine', vm.running?'ok':'bad', vm.running?'Running':'Stopped',
+    [['Process', vm.process||'not running'], ['Memory', vm.running? (vm.memMB/1024).toFixed(1)+' GB'+(vm.allocMB?` / ${(vm.allocMB/1024).toFixed(1)} GB`:''):'—'],
+     ['CPU', vm.running? vm.cpu+' %':'—'], ['Up for', vm.started? ago(vm.started):'—']], vm.running?bar(vm.cpu):''), 'VM');
+
+  const as=d.autostart||{};
+  // VirtualBox's Windows autostart service starts the VMs at boot and then exits, so "Stopped" is normal.
+  const al = !as.installed || as.startType!=='Automatic' ? 'warn' : 'ok';
+  add(card('VM autostart service', al, !as.installed ? 'Not installed' : as.startType!=='Automatic' ? 'Not set to start at boot' : as.status==='Running' ? 'Starting VMs…' : 'Ready for next boot',
+    as.installed?[['Start type', as.startType],['Service now', as.status],['Account', (as.name||'').replace(/^VirtualBox Autostart Service\s*/,'')]]:[['Effect','HA won’t start by itself after reboot']]), 'Autostart');
+
+  const h=d.host||{}; const memPct = h.memTotalGB? h.memUsedGB/h.memTotalGB*100 : 0;
+  add(card('This PC', memPct>92 || (h.diskFreeGB!=null && h.diskFreeGB<10) ? 'warn' : 'ok', `CPU ${h.cpu??'—'}% · RAM ${Math.round(memPct)}%`,
+    [['Memory', `${h.memUsedGB} / ${h.memTotalGB} GB`], ['Disk C: free', `${h.diskFreeGB} / ${h.diskTotalGB} GB`], ['Up since boot', ago(h.boot)]], bar(memPct)), 'PC');
+
+  const ts=d.tailscale||{};
+  if(ts.installed) add(card('Tailscale', ts.state==='Running'?'ok':'warn', ts.state==='Running'?'Connected':ts.state, [['Tailnet IP', ts.ip||'—'], ['Devices online', ts.peers!=null?`${ts.peersOnline} / ${ts.peers}`:'—']]), 'Tailscale');
+
+  for(const w of (d.web||[])){
+    if (w.err==='not configured') { cards.push(card(w.name, '', 'Not set up', [['', 'Add its address in C:\\HA\\status\\config.json']])); continue; }
+    if (w.kind==='jar') { add(jarCard(w), 'Jar'); continue; }
+    let host=''; try{ host=new URL(w.url).host; }catch(e){}
+    add(card(w.name, w.ok ? (w.ms>3000?'warn':'ok') : 'bad', w.ok ? `Online · ${w.ms} ms` : 'Down',
+      [['Through', 'Tailscale Funnel (internet)'], ['Address', host], ...(w.ok?[]:[['Error', w.err||('HTTP '+w.code)]])]), /tunnel|remote/i.test(w.name)?'Tunnel':w.name);
+  }
+  const mc=d.minecraft||[];
+  if(!mc.length) cards.push(card('Minecraft', '', 'Not set up', [['', 'Add the server in C:\\HA\\status\\config.json']]));
+  for(const s of mc) add(card('Minecraft · '+(s.name||s.host), s.online?'ok':'bad', s.online?`${s.players} / ${s.max} players`:'Offline',
+      s.online? [['Version', s.version], ['Ping', s.ms+' ms'], ['Who', (s.who||[]).join(', ')||'—']] : [['Address', `${s.host}:${s.port}`], ['Error', s.err||'']]), 'Minecraft');
+
+  // Problems first; the rest rotate their places each time the dashboard comes back (burn-in).
+  const rank = l => l==='bad'?0:l==='warn'?1:l?2:3;   // not-set-up cards go last
+  const rot = cards.map((c,i)=>({c, k: rank(c.level)*100 + ((i + order) % cards.length)}));
+  rot.sort((a,b)=>a.k-b.k);
+  $('grid').innerHTML = rot.map((x,i)=>x.c.html(i)).join('');
+
+  const levels = status.map(s=>s.level);
+  worst = levels.includes('bad')?'bad':levels.includes('warn')?'warn':'ok';
+  const msg = worst==='ok'?'All systems normal':worst==='warn'?'Needs attention':'Something is down';
+  $('overall').innerHTML = `<span class="dot ${worst}"></span>${msg}`;
+  $('aline').innerHTML = status.map(s=>`<span class="it"><span class="dot ${s.level}"></span>${esc(s.label)}</span>`).join('');
+  $('hostname').textContent = (h.name || '') + (d.version ? ' · v ' + d.version : '');
+  if (worst === 'bad' && document.body.classList.contains('amb')) showDash();
+}
+
+/* ---------------- views: dashboard ↔ ambient, wandering clock, pixel drift ---------------- */
+let viewTimer = null, holdDash = 0, DASH_HOLD = false;
+function showDash(){
+  document.body.classList.remove('amb'); order++;
+  if (last) render(last);
+  const g = $('grid'); g.classList.add('enter'); setTimeout(()=>g.classList.remove('enter'), 2500);
+  clearTimeout(viewTimer); viewTimer = setTimeout(showAmb, DASH_MS);
+}
+function showAmb(){
+  if (!DASH_HOLD && (worst === 'bad' || Date.now() < holdDash)) { clearTimeout(viewTimer); viewTimer = setTimeout(showAmb, 30e3); return; }
+  moveFloat(true); document.body.classList.add('amb');
+  clearTimeout(viewTimer); viewTimer = setTimeout(showDash, AMB_MS);
+}
+function moveFloat(now){
+  const f = $('float'), place = () => { f.style.setProperty('--ax', rnd(4, 46)+'%'); f.style.setProperty('--ay', rnd(6, 44)+'%'); };
+  if (now) { place(); return; }
+  f.classList.add('hide'); setTimeout(()=>{ place(); f.classList.remove('hide'); }, 1700);
+}
+setInterval(()=>{ if (document.body.classList.contains('amb')) moveFloat(false); }, 70e3);
+function drift(){ $('stage').style.transform = `translate(${rnd(-14,14).toFixed(1)}px, ${rnd(-10,10).toFixed(1)}px)`; }
+setInterval(drift, 30e3); drift();
+['mousemove','keydown','touchstart'].forEach(e => addEventListener(e, () => { holdDash = Date.now() + 120e3; if (document.body.classList.contains('amb')) showDash(); }));
+function isNight(){ const h = new Date().getHours(); return h >= NIGHT[0] || h < NIGHT[1]; }
+
+/* ---------------- background photo with a distorted arrival ---------------- */
 let bgId = null, bgFront = 'bgA';
+function kenBurns(el){
+  const s0 = rnd(1.0, 1.06), s1 = s0 + rnd(.05, .12), v = () => rnd(-2.5, 2.5).toFixed(2) + '%';
+  el.style.setProperty('--s0', s0); el.style.setProperty('--s1', s1);
+  ['--x0','--y0','--x1','--y1'].forEach(k => el.style.setProperty(k, v()));
+  el.style.setProperty('--kbdur', rnd(60, 110).toFixed(0) + 's');
+  el.classList.remove('kb'); void el.offsetWidth; el.classList.add('kb');
+}
 function setBg(b){
   if(!b || !b.id || b.id === bgId) return;
   const url = '/bg?id=' + encodeURIComponent(b.id), img = new Image();
   img.onload = () => {
-    bgId = b.id; const back = bgFront === 'bgA' ? 'bgB' : 'bgA';
-    $(back).style.backgroundImage = `url("${url}")`; $(back).classList.add('show'); $(bgFront).classList.remove('show'); bgFront = back;
-    $('photo').textContent = [b.title, b.copyright].filter(Boolean).join(' · ');
+    const first = bgId === null; bgId = b.id;
+    const back = bgFront === 'bgA' ? 'bgB' : 'bgA';
+    $(back).style.backgroundImage = `url("${url}")`; kenBurns($(back));
+    if (!first) warp($(back), 3400, 160, 'arrive');
+    $(back).classList.add('show'); $(bgFront).classList.remove('show'); bgFront = back;
+    const cap = [b.title, b.copyright].filter(Boolean).join(' · ');
+    $('photo').textContent = cap; $('aphoto').textContent = b.title || '';
+    FX.choose();
   };
   img.src = url;
 }
-function render(d){
-  const cards=[], levels=[];
-  const ha=d.ha||{};
-  let hl = ha.core==='running' && ha.health==='Healthy' ? 'ok' : ha.core==='running' ? 'warn' : ha.core==='starting' || ha.supervisor==='Connected' ? 'warn' : 'bad';
-  const hm = ha.core==='running' ? (ha.health==='Healthy'?'Running':'Running · '+ha.health) : ha.core==='starting' ? 'Starting…' : ha.supervisor==='Connected' ? 'Core not up yet' : 'Not reachable';
-  cards.push(card('Home Assistant', hl, hm, [['Core', ha.core], ['Supervisor', ha.supervisor], ['Health', ha.health], ['Address', ha.url||'']])); levels.push(hl);
-
-  const vm=d.vm||{};
-  const vl = vm.running ? 'ok' : 'bad';
-  const vmRows=[['Process', vm.process||'not running'], ['Memory', vm.running? (vm.memMB/1024).toFixed(1)+' GB'+(vm.allocMB?` / ${(vm.allocMB/1024).toFixed(1)} GB`:''):'—'],
-                ['CPU', vm.running? vm.cpu+' %':'—'], ['Up for', vm.started? ago(vm.started):'—']];
-  cards.push(card('HA virtual machine', vl, vm.running?'Running':'Stopped', vmRows, vm.running?bar(vm.cpu):'')); levels.push(vl);
-
-  const as=d.autostart||{};
-  // VirtualBox's Windows autostart service starts the VMs at boot and then exits, so "Stopped" is normal.
-  const al = !as.installed ? 'warn' : as.startType!=='Automatic' ? 'warn' : 'ok';
-  const am = !as.installed ? 'Not installed' : as.startType!=='Automatic' ? 'Not set to start at boot' : as.status==='Running' ? 'Starting VMs…' : 'Ready for next boot';
-  cards.push(card('VM autostart service', al, am, as.installed?[['Start type', as.startType],['Service now', as.status],['Account', (as.name||'').replace(/^VirtualBox Autostart Service\s*/,'')]]:[['Effect','HA won’t start by itself after reboot']])); levels.push(al);
-
-  const h=d.host||{}; const memPct = h.memTotalGB? h.memUsedGB/h.memTotalGB*100 : 0;
-  const hostL = memPct>92 || (h.diskFreeGB!=null && h.diskFreeGB<10) ? 'warn' : 'ok';
-  cards.push(card('This PC', hostL, `CPU ${h.cpu??'—'}% · RAM ${Math.round(memPct)}%`,
-    [['Memory', `${h.memUsedGB} / ${h.memTotalGB} GB`], ['Disk C: free', `${h.diskFreeGB} / ${h.diskTotalGB} GB`], ['Up since boot', ago(h.boot)]], bar(memPct))); levels.push(hostL);
-
-  const ts=d.tailscale||{};
-  if(ts.installed){ const tl = ts.state==='Running'?'ok':'warn';
-    cards.push(card('Tailscale', tl, ts.state==='Running'?'Connected':ts.state, [['Tailnet IP', ts.ip||'—'], ['Devices online', ts.peers!=null?`${ts.peersOnline} / ${ts.peers}`:'—']])); levels.push(tl); }
-
-  for(const w of (d.web||[])){
-    const wl = w.ok ? (w.ms>3000?'warn':'ok') : (w.err==='not configured' ? '' : 'bad');
-    let host=''; try{ host=new URL(w.url).host; }catch(e){}
-    const main = w.err==='not configured' ? 'Not set up' : w.ok ? `Online · ${w.ms} ms` : 'Down';
-    const rows = w.err==='not configured' ? [['', 'Add its address in C:\\HA\\status\\config.json']]
-      : [['Through', w.kind==='jar' ? (w.via==='funnel'?'Tailscale Funnel (internet)':(w.via?'tailnet':'—')) : 'Tailscale Funnel (internet)'], ['Address', host], ...(w.ok?[]:[['Error', w.err||('HTTP '+w.code)]])];
-    cards.push(card(w.name, wl, main, rows)); if(wl) levels.push(wl);
-  }
-
-  const mc=d.minecraft||[];
-  if(!mc.length) cards.push(card('Minecraft', '', 'Not set up', [['', 'Add the server in C:\\HA\\status\\config.json']]));
-  for(const s of mc){ const ml = s.online?'ok':'bad';
-    cards.push(card('Minecraft · '+(s.name||s.host), ml, s.online?`${s.players} / ${s.max} players`:'Offline',
-      s.online? [['Version', s.version], ['Ping', s.ms+' ms'], ['Who', (s.who||[]).join(', ')||'—']] : [['Address', `${s.host}:${s.port}`], ['Error', s.err||'']])); levels.push(ml); }
-
-  $('grid').innerHTML = cards.join('');
-  const worst = levels.includes('bad')?'bad':levels.includes('warn')?'warn':'ok';
-  $('overall').className='big'; $('overall').innerHTML = `<span class="dot ${worst}"></span>` + (worst==='ok'?'All systems normal':worst==='warn'?'Needs attention':'Something is down');
-  $('hostname').textContent = (h.name || '') + (d.version ? ' · v ' + d.version : '');
+// Animated SVG displacement on one layer: 'arrive' melts the new photo into place, the others are short gusts.
+let warping = false;
+function warp(el, ms, peak, kind){
+  if (warping) return; warping = true;
+  const turb = $('turb'), disp = $('disp'), t0 = performance.now();
+  const fr = { arrive:[.006,.012], rain:[.02,.07], wind:[.002,.04], fire:[.012,.05], snow:[.008,.01], fireflies:[.01,.01], none:[.01,.02] }[kind] || [.01,.02];
+  turb.setAttribute('seed', Math.floor(rnd(1, 999)));
+  el.style.filter = 'url(#warp)';
+  const step = now => {
+    const t = Math.min(1, (now - t0) / ms);
+    const k = kind === 'arrive' ? Math.pow(1 - t, 2.2) : Math.sin(Math.PI * t);
+    disp.setAttribute('scale', (peak * k).toFixed(1));
+    turb.setAttribute('baseFrequency', `${(fr[0]*(1+.6*Math.sin(t*6))).toFixed(4)} ${(fr[1]*(1+.4*Math.cos(t*4))).toFixed(4)}`);
+    if (t < 1) requestAnimationFrame(step); else { el.style.filter = ''; disp.setAttribute('scale', 0); warping = false; }
+  };
+  requestAnimationFrame(step);
 }
+(function gusts(){ setTimeout(() => { if (bgId) warp($(bgFront), rnd(3500, 6000), FX.mode==='wind'?34:FX.mode==='fire'?18:FX.mode==='rain'?22:14, FX.mode); gusts(); }, rnd(120e3, 300e3)); })();
+
+/* ---------------- particle effects: rain, wind, fire, snow, fireflies ---------------- */
+const FX = (() => {
+  const cv = $('fx'), cx = cv.getContext('2d');
+  let W = 0, H = 0, parts = [], mode = 'none', alpha = 0, target = 0, lastT = 0, flashA = 0, nextFlash = 0, glowT = 0;
+  const resize = () => { W = cv.width = innerWidth; H = cv.height = innerHeight; };
+  addEventListener('resize', resize); resize();
+  const sprite = (r, g, b) => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+    const gr = x.createRadialGradient(32,32,0,32,32,32); gr.addColorStop(0, `rgba(${r},${g},${b},1)`); gr.addColorStop(.35, `rgba(${r},${g},${b},.55)`); gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    x.fillStyle = gr; x.fillRect(0,0,64,64); return c; };
+  const S = { ember: sprite(255,150,60), hot: sprite(255,220,140), snow: sprite(255,255,255), fly: sprite(210,255,120) };
+  const leafColors = ['#c9a227','#b5651d','#7a9a3a','#d2691e','#9c6b30'];
+  const make = {
+    rain: () => ({ x: rnd(-100, W), y: rnd(-H, 0), l: rnd(14, 34), v: rnd(900, 1500), w: rnd(.6, 1.6) }),
+    wind: () => Math.random() < .75 ? { t:'s', x: rnd(-W, 0), y: rnd(0, H), l: rnd(80, 260), v: rnd(700, 1400), a: rnd(.05, .18) }
+                                    : { t:'l', x: rnd(-W, 0), y: rnd(0, H), r: rnd(0, 6), vr: rnd(-4, 4), v: rnd(250, 520), s: rnd(5, 10), ph: rnd(0, 6), c: pick(leafColors) },
+    fire: () => ({ x: rnd(0, W), y: H + rnd(0, 80), v: rnd(50, 160), s: rnd(4, 14), ph: rnd(0, 6), life: rnd(4, 10), age: 0, hot: Math.random() < .25 }),
+    snow: () => ({ x: rnd(0, W), y: rnd(-H, 0), v: rnd(25, 80), s: rnd(2, 7), ph: rnd(0, 6), sw: rnd(10, 40) }),
+    fireflies: () => ({ x: rnd(0, W), y: rnd(H*.25, H), vx: rnd(-20, 20), vy: rnd(-15, 15), s: rnd(8, 18), ph: rnd(0, 6), f: rnd(.5, 1.5) }),
+  };
+  const counts = { rain: 260, wind: 90, fire: 180, snow: 170, fireflies: 55, none: 0 };
+  function set(m){
+    mode = m; parts = []; const n = Math.round(counts[m] * (isNight() ? .5 : 1) * Math.min(1.4, W / 1600));
+    for (let i = 0; i < n; i++) parts.push(make[m] ? make[m]() : null);
+    alpha = 0; target = 1; nextFlash = performance.now() + rnd(30e3, 90e3);
+  }
+  function choose(){
+    const night = isNight();
+    const pool = night ? ['snow', 'fireflies', 'none'] : ['rain', 'wind', 'fire', 'snow', 'fireflies', 'rain', 'wind', 'fire'];
+    let m; do { m = pick(pool); } while (m === mode && pool.length > 1);
+    if (Q.get('fx')) m = Q.get('fx');
+    target = 0; setTimeout(() => set(m), 2500);
+  }
+  function frame(now){
+    requestAnimationFrame(frame);
+    if (now - lastT < 33) return;                       // ~30 fps is plenty and keeps the PC cool
+    const dt = Math.min(.1, (now - lastT) / 1000); lastT = now;
+    alpha += (target - alpha) * Math.min(1, dt * 1.2);
+    cx.clearRect(0, 0, W, H);
+    if (mode === 'none' || alpha < .01) { $('flash').style.opacity = 0; return; }
+    cx.globalAlpha = alpha;
+    if (mode === 'rain') {
+      cx.strokeStyle = 'rgba(200,215,255,.42)'; cx.lineCap = 'round';
+      for (const p of parts) {
+        p.y += p.v * dt; p.x += p.v * .18 * dt;
+        cx.lineWidth = p.w; cx.beginPath(); cx.moveTo(p.x, p.y); cx.lineTo(p.x - p.l * .18, p.y - p.l); cx.stroke();
+        if (p.y > H) { cx.beginPath(); cx.ellipse(p.x, H - 2, 6 * p.w, 1.5, 0, 0, Math.PI * 2); cx.stroke(); Object.assign(p, make.rain(), { y: rnd(-60, 0) }); }
+      }
+      if (!isNight() && now > nextFlash) { flashA = .35; nextFlash = now + rnd(40e3, 140e3); if (Math.random() < .6) setTimeout(()=>{ flashA = .25; }, 160); }
+      flashA *= Math.pow(.02, dt); $('flash').style.opacity = (flashA * alpha).toFixed(3);
+    } else if (mode === 'wind') {
+      for (const p of parts) {
+        p.x += p.v * dt;
+        if (p.t === 's') {
+          const g = cx.createLinearGradient(p.x - p.l, 0, p.x, 0); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, `rgba(255,255,255,${p.a})`);
+          cx.strokeStyle = g; cx.lineWidth = 1.2; cx.beginPath(); cx.moveTo(p.x - p.l, p.y); cx.quadraticCurveTo(p.x - p.l/2, p.y - 6, p.x, p.y); cx.stroke();
+        } else {
+          p.ph += dt * 3; p.y += Math.sin(p.ph) * 40 * dt; p.r += p.vr * dt;
+          cx.save(); cx.translate(p.x, p.y); cx.rotate(p.r); cx.scale(1, Math.abs(Math.sin(p.ph)) * .7 + .3);
+          cx.fillStyle = p.c; cx.beginPath(); cx.ellipse(0, 0, p.s, p.s * .45, 0, 0, Math.PI * 2); cx.fill(); cx.restore();
+        }
+        if (p.x - (p.l || 20) > W) Object.assign(p, make.wind(), { x: rnd(-300, -20) });
+      }
+    } else if (mode === 'fire') {
+      glowT += dt; const fl = .55 + .25 * Math.sin(glowT * 7.3) * Math.sin(glowT * 3.1) + .1 * Math.random();
+      const g = cx.createLinearGradient(0, H, 0, H * .55); g.addColorStop(0, `rgba(255,90,20,${.32 * fl})`); g.addColorStop(1, 'rgba(255,90,20,0)');
+      cx.fillStyle = g; cx.fillRect(0, H * .55, W, H * .45);
+      cx.globalCompositeOperation = 'lighter';
+      for (const p of parts) {
+        p.age += dt; p.y -= p.v * dt; p.ph += dt * 2; p.x += Math.sin(p.ph) * 18 * dt + 12 * dt;
+        const life = 1 - p.age / p.life, s = p.s * (.6 + .4 * life);
+        cx.globalAlpha = alpha * Math.max(0, life) * (.6 + .4 * Math.random());
+        cx.drawImage(p.hot ? S.hot : S.ember, p.x - s * 2, p.y - s * 2, s * 4, s * 4);
+        if (life <= 0 || p.y < -20) Object.assign(p, make.fire());
+      }
+      cx.globalCompositeOperation = 'source-over';
+    } else if (mode === 'snow') {
+      for (const p of parts) {
+        p.ph += dt; p.y += p.v * dt; const x = p.x + Math.sin(p.ph) * p.sw;
+        cx.globalAlpha = alpha * .85; cx.drawImage(S.snow, x - p.s, p.y - p.s, p.s * 2, p.s * 2);
+        if (p.y > H + 10) Object.assign(p, make.snow(), { y: -10 });
+      }
+    } else if (mode === 'fireflies') {
+      cx.globalCompositeOperation = 'lighter';
+      for (const p of parts) {
+        p.ph += dt * p.f; p.vx += rnd(-30, 30) * dt; p.vy += rnd(-30, 30) * dt; p.vx *= .98; p.vy *= .98;
+        p.x = (p.x + p.vx * dt + W) % W; p.y = Math.min(H, Math.max(H * .15, p.y + p.vy * dt));
+        const b = Math.max(0, Math.sin(p.ph * 2)); cx.globalAlpha = alpha * b;
+        cx.drawImage(S.fly, p.x - p.s, p.y - p.s, p.s * 2, p.s * 2);
+      }
+      cx.globalCompositeOperation = 'source-over';
+    }
+    cx.globalAlpha = 1;
+  }
+  requestAnimationFrame(frame);
+  setInterval(choose, 12 * 60e3);
+  return { choose, get mode(){ return mode; } };
+})();
+
+/* ---------------- data + clock ---------------- */
 async function poll(){
   try { const r = await fetch('/api',{cache:'no-store'}); last = await r.json(); lastOk = Date.now();
     if (ver && last.version && last.version !== ver) { location.reload(); return; }
     ver = last.version || ver; render(last); setBg(last.bg); }
-  catch(e){ $('overall').innerHTML = '<span class="dot bad"></span>Status service not responding'; }
+  catch(e){ $('overall').innerHTML = '<span class="dot bad"></span>Status service not responding'; worst = 'bad';
+            $('aline').innerHTML = '<span class="it"><span class="dot bad"></span>Status service not responding</span>'; }
 }
-function tick(){ const n=new Date();
-  $('clock').textContent = n.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  $('date').textContent = n.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  if(lastOk) $('updated').textContent = 'Updated '+Math.round((Date.now()-lastOk)/1000)+' s ago';
-  if(last) { /* keep relative times fresh */ } }
+function tick(){ const n = new Date();
+  const t = n.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}), dd = n.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  $('clock').textContent = $('aclock').textContent = t; $('date').textContent = $('adate').textContent = dd;
+  if (lastOk) $('updated').textContent = 'Updated ' + Math.round((Date.now() - lastOk) / 1000) + ' s ago';
+  document.body.classList.toggle('night', isNight());
+}
 poll(); setInterval(poll, 10000); tick(); setInterval(tick, 1000);
+if (Q.get('view') === 'amb') { DASH_HOLD = true; showAmb(); } else showDash();
+setTimeout(() => { if (FX.mode === 'none') FX.choose(); }, 4000);
 </script>
 </body>
 </html>

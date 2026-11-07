@@ -12,10 +12,11 @@ function Log($m) {
   try { if ((Test-Path $logFile) -and (Get-Item $logFile).Length -gt 1MB) { Move-Item $logFile "$logFile.old" -Force } } catch {}
   try { Add-Content $logFile ("{0:yyyy-MM-dd HH:mm:ss} {1}" -f (Get-Date), $m) } catch {} }
 
-function Get-Http($url, $timeoutMs) {
+function Get-Http($url, $timeoutMs, $headers) {
   try {
     $req = [System.Net.HttpWebRequest]::Create($url)
     $req.Timeout = $timeoutMs; $req.ReadWriteTimeout = $timeoutMs; $req.UserAgent = 'WindowsShellClient/9.0.40929.0 (Windows)'
+    if ($headers) { foreach ($k in $headers.Keys) { $req.Headers.Add($k, $headers[$k]) } }
     $resp = $req.GetResponse()
     $sr = New-Object System.IO.StreamReader($resp.GetResponseStream())
     $body = $sr.ReadToEnd(); $code = [int]$resp.StatusCode; $resp.Close()
@@ -164,6 +165,12 @@ function Get-Web($w) {
   if (-not $o.ok) { $r.err = $o.err; return $r }
   if ($w.kind -eq 'jar') {
     try { $j = $o.body | ConvertFrom-Json; $r.ok = [bool]$j.ok; $r.via = "$($j.via)" } catch { $r.err = 'unexpected reply' }
+    if ($r.ok -and $w.monitorKey) {
+      # Jar's read-only /v1/monitor (versions and health of every part), unlocked by its own key.
+      $m = Get-Http ($w.url -replace '/v1/health.*$', '/v1/monitor') 6000 @{ 'X-Monitor-Key' = "$($w.monitorKey)" }
+      if ($m.ok -and $m.code -eq 200 -and $m.body) { try { $r.monitor = $m.body | ConvertFrom-Json } catch {} }
+      elseif ($m.ok) { $r.monitorErr = "HTTP $($m.code)" } else { $r.monitorErr = $m.err }
+    }
   } else { $r.ok = ($o.code -ge 200 -and $o.code -lt 400) ; if (-not $r.ok) { $r.err = "HTTP $($o.code)" } }
   return $r
 }

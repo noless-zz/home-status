@@ -29,6 +29,15 @@ copy C:\HA\status\config.example.json C:\HA\status\config.json   # then edit it
 
 Then, signed in as the board's account, run `C:\HA\status\install-for-this-user.bat`.
 
+## Screen-saver behaviour (burn-in)
+
+The board alternates between the dashboard (~100 s) and an ambient view (~4 min) with a big clock that
+wanders, a line of status dots and the photo. Everything drifts a few pixels every 30 s, the photo slowly
+pans and zooms, cards change places each time the dashboard returns, and 23:00–06:00 is dimmer and calmer.
+Weather effects (rain with lightning, wind with leaves, fire embers, snow, fireflies) change with each photo
+and every 12 minutes, and the photo occasionally ripples. If something is down, the dashboard stays up.
+Moving the mouse shows the dashboard for 2 minutes. Testing: `http://localhost:8090/?fx=rain&view=amb`.
+
 ## Deploying changes
 
 Push to `main`. The PC fetches `origin/main` every 10 minutes; on a new commit it resets to it,
@@ -46,7 +55,8 @@ A JSON mistake keeps the previous settings and is logged in `status.log`.
 
 - `haHost`, `haIp`, `haPort`: where Home Assistant answers (the Observer is checked on port 4357).
 - `web`: list of `{name, kind, url}`. `kind: "jar"` expects a Jar `/v1/health` reply; anything else
-  is OK on HTTP 2xx/3xx.
+  is OK on HTTP 2xx/3xx. A Jar entry can add `"monitorKey"` (the `[monitor] key` from Jar's config.toml)
+  to show every Jar part: versions, supervisor, worker, Ollama, Funnel, memos, AI test.
 - `minecraft`: list of `{name, host, port}` (Java edition status ping).
 - `lan`: `true` to serve the board on the home network too. Needs, once, in an admin PowerShell:
   `netsh http add urlacl url=http://+:8090/ user=Everyone` and a firewall rule for TCP 8090.
