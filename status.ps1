@@ -58,7 +58,15 @@ function Get-VM {
     $r.running = $true
     $r.process = ($procs | Select-Object -ExpandProperty ProcessName -Unique) -join ', '
     $r.memMB = [math]::Round((($procs | Measure-Object WorkingSet64 -Sum).Sum) / 1MB)
-    try { $r.started = ($procs | Sort-Object StartTime | Select-Object -First 1).StartTime.ToString('o') } catch {}
+    # Another user's process: StartTime and guest RAM aren't visible through Get-Process, but WMI has both.
+    try {
+      $wp = @(Get-CimInstance Win32_Process -Filter "Name='VBoxHeadless.exe' or Name='VirtualBoxVM.exe'" -ErrorAction Stop)
+      if ($wp.Count) {
+        $r.started = ($wp | Sort-Object CreationDate | Select-Object -First 1).CreationDate.ToString('o')
+        $priv = [math]::Round((($wp | Measure-Object PrivatePageCount -Sum).Sum) / 1MB)
+        if ($priv -gt $r.memMB) { $r.memMB = $priv }
+      }
+    } catch {}
     try {
       $perf = Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -Filter "Name like 'VBoxHeadless%' or Name like 'VirtualBoxVM%'" -ErrorAction Stop
       $r.cpu = [math]::Round((($perf | Measure-Object PercentProcessorTime -Sum).Sum) / [int]$env:NUMBER_OF_PROCESSORS, 1)
